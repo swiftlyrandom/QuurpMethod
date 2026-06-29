@@ -2,7 +2,7 @@
 local Players = game:GetService("Players")
 local HttpService = game:GetService("HttpService")
 local player = Players.LocalPlayer
-local Config = require(script.Parent.VehicleConfig)
+local Config = _G._Modules.VehicleConfig
 
 local REGISTER_URL = Config.REGISTER_URL()
 local ACK_URL      = Config.ACK_URL()
