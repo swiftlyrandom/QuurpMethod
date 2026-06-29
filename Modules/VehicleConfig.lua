@@ -23,5 +23,13 @@ return {
         ["Bomber"]         = true,
         ["Torpedo Bomber"] = true,
         ["Large Bomber"]   = true,
+    },
+    
+    RPG_CONFIG = {
+    enabled = true,
+    bulletSpeed = 225,
+    fireCooldown = 0.2,
+    maxRange = 1800,
+    minTargetSpeed = 100,
     }
 }
