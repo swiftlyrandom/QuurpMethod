@@ -5,7 +5,7 @@ local player = Players.LocalPlayer
 
 local RPGWeapon = {}
 local bulletSpeed = 225
-local fireCooldown = 0.2
+local fireCooldown = 3
 local maxRange = 2000
 local minSpeed = 100
 local lastFireTime = 0
