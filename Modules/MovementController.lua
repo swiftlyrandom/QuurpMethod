@@ -16,27 +16,6 @@ local MC = {
 
 local corkscrewAngle = 0
 
--- call this each frame with dt
-function MOVE.tickCorkscrew(dt)
-    local degPerSec = _G._Modules.VehicleConfig.PLANE_CONFIG.corkscrewDegPerSec or 120
-    corkscrewAngle = corkscrewAngle + degPerSec * dt
-end
-
--- returns a Vector3 offset to be added to the target position
-function MOVE.getCorkscrewOffset(forward)
-    local radius = _G._Modules.VehicleConfig.PLANE_CONFIG.corkscrewRadius or 30
-    -- compute right vector perpendicular to forward (avoid world up singularity)
-    local right = forward:Cross(Vector3.new(0, 1, 0))
-    if right.Magnitude < 0.001 then
-        right = Vector3.new(1, 0, 0)
-    else
-        right = right.Unit
-    end
-    local up = forward:Cross(right).Unit
-    local rad = math.rad(corkscrewAngle % 360)
-    return (right * math.cos(rad) + up * math.sin(rad)) * radius
-end
-
 local function setHeading(body, targetPos, lerpFactor)
     local gyro = body:FindFirstChild("BodyGyro")
     if not gyro then return end
@@ -115,6 +94,27 @@ function MOVE.cruise(body)
     forward = safeTarget(body, forward)
     setHeading(body, forward, MC.lerpCruise)
     setSpeed(body, MC.cruiseSpeed)
+end
+
+-- call this each frame with dt
+function MOVE.tickCorkscrew(dt)
+    local degPerSec = _G._Modules.VehicleConfig.PLANE_CONFIG.corkscrewDegPerSec or 120
+    corkscrewAngle = corkscrewAngle + degPerSec * dt
+end
+
+-- returns a Vector3 offset to be added to the target position
+function MOVE.getCorkscrewOffset(forward)
+    local radius = _G._Modules.VehicleConfig.PLANE_CONFIG.corkscrewRadius or 30
+    -- compute right vector perpendicular to forward (avoid world up singularity)
+    local right = forward:Cross(Vector3.new(0, 1, 0))
+    if right.Magnitude < 0.001 then
+        right = Vector3.new(1, 0, 0)
+    else
+        right = right.Unit
+    end
+    local up = forward:Cross(right).Unit
+    local rad = math.rad(corkscrewAngle % 360)
+    return (right * math.cos(rad) + up * math.sin(rad)) * radius
 end
 
 return MOVE
