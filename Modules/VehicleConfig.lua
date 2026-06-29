@@ -33,5 +33,16 @@ return {
         fireCooldown   = 0.2,
         maxRange       = 1800,
         minTargetSpeed = 100,
+    },
+
+    GUNNER_CONFIG = {
+        bulletSpeed   = 600,
+        shootDuration = 2,
+        shootBreak    = 1,
+        ownerName     = "B3X0Z",        -- the pilot's username
+        bomberName    = "Large Bomber",
+        maxRange      = 1400,
+        setupDelay    = 8,
+        enemySpeed    = 100,
     }
 }
