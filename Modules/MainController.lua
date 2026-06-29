@@ -3,12 +3,12 @@ local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local player = Players.LocalPlayer
 
-local Config       = require(script.Parent.VehicleConfig)
-local MOVE         = require(script.Parent.MovementController)
-local scanObjectives = require(script.Parent.WorldScanner)
-local AutoSeater   = require(script.Parent.AutoSeater)
-local ObjResolver  = require(script.Parent.ObjectiveResolver)
-local Network      = require(script.Parent.NetworkController)
+local Config       = _G._Modules.VehicleConfig
+local MOVE         = _G._Modules.MovementController
+local scanObjectives = _G._Modules.WorldScanner
+local AutoSeater   = _G._Modules.AutoSeater
+local ObjResolver  = _G._Modules.ObjectiveResolver
+local Network      = _G._Modules.NetworkController
 
 local NETWORK_INTERVAL = 1.0
 local lastNetworkCheck = 0
