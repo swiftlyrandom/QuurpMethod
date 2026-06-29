@@ -90,8 +90,11 @@ local function boot()
             or vehicle:FindFirstChildWhichIsA("BasePart")
         if not body then return end
 
+        MOVE.tickCorkscrew(dt)
+
         local target = ObjResolver.getTarget(body, dt)
         if target then
+            target = target + MOVE.getCorkscrewOffset(body.CFrame.LookVector)
             MOVE.intercept(body, target, Vector3.zero, dt)
         else
             MOVE.cruise(body)
