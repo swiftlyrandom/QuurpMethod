@@ -2,10 +2,10 @@
 local BASE_URL = "https://scholar-sustained-wasp.ngrok-free.dev"
 
 return {
-    BASE_URL      = BASE_URL,
-    REGISTER_URL  = BASE_URL .. "/register",
-    ACK_URL       = BASE_URL .. "/ack-team",
-    COMMAND_URL   = BASE_URL .. "/get-command",
+    BASE_URL       = BASE_URL,
+    REGISTER_URL   = BASE_URL .. "/register",
+    ACK_URL        = BASE_URL .. "/ack-team",
+    COMMAND_URL    = BASE_URL .. "/get-command",
 
     PLANE_CONFIG = {
         difficulty     = "Elite",
@@ -16,7 +16,7 @@ return {
         engineAltitude = 40,
         debugPrint     = false,
         offsetRangeMin = -300,
-        offsetRangeMax =  300,
+        offsetRangeMax = 300,
     },
 
     PLANE_NAMES = {
@@ -26,10 +26,10 @@ return {
     },
     
     RPG_CONFIG = {
-    enabled = true,
-    bulletSpeed = 225,
-    fireCooldown = 0.2,
-    maxRange = 1800,
-    minTargetSpeed = 100,
+        enabled        = true,
+        bulletSpeed    = 225,
+        fireCooldown   = 0.2,
+        maxRange       = 1800,
+        minTargetSpeed = 100,
     }
 }
