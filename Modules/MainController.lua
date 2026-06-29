@@ -9,7 +9,7 @@ local WorldScanner = _G._Modules.WorldScanner
 local AutoSeater   = _G._Modules.AutoSeater
 local ObjResolver  = _G._Modules.ObjectiveResolver
 local Network      = _G._Modules.NetworkController
-local RPGWeapon = _G._Modules.RPGWeapon
+local RPGWeapon    = _G._Modules.RPGWeapon
 
 local NETWORK_INTERVAL = 1.0
 local lastNetworkCheck = 0
@@ -27,7 +27,7 @@ local function boot()
     ObjResolver.setObjectives(objectives)
     
     if objectives["harbour_enemy"] then
-    RPGWeapon.addStaticTarget(objectives["harbour_enemy"], 1)
+        RPGWeapon.addStaticTarget(objectives["harbour_enemy"], 1)
     end
 
     -- Re‑scan on map reload
@@ -97,7 +97,7 @@ local function boot()
         if hp and hp.Value <= 0 then
             -- Kill all BodyMovers so the plane falls naturally
             for _, child in ipairs(vehicle:GetDescendants()) do
-            if child:IsA("BodyVelocity") or child:IsA("BodyGyro") or child:IsA("AlignOrientation") or child:IsA("LinearVelocity") or child:IsA("AngularVelocity") then
+                if child:IsA("BodyVelocity") or child:IsA("BodyGyro") or child:IsA("AlignOrientation") or child:IsA("LinearVelocity") or child:IsA("AngularVelocity") then
                     child:Destroy()
                 end
             end
@@ -131,7 +131,6 @@ local function boot()
         if rpgConfig and rpgConfig.enabled then
             RPGWeapon.update(body)
         end
-            
     end)
 end
 
