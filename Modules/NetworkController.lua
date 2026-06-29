@@ -4,9 +4,9 @@ local HttpService = game:GetService("HttpService")
 local player = Players.LocalPlayer
 local Config = _G._Modules.VehicleConfig
 
-local REGISTER_URL = Config.REGISTER_URL()
-local ACK_URL      = Config.ACK_URL()
-local COMMAND_URL  = Config.COMMAND_URL()
+local REGISTER_URL = Config.REGISTER_URL   -- no parentheses
+local ACK_URL      = Config.ACK_URL
+local COMMAND_URL  = Config.COMMAND_URL
 
 local NETWORK_TIMEOUT  = 5
 local isFetching = false
