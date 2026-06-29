@@ -25,6 +25,10 @@ local function boot()
 
     local objectives = WorldScanner.scan(myTeamName)
     ObjResolver.setObjectives(objectives)
+    
+    if objectives["harbour_enemy"] then
+    RPGWeapon.addStaticTarget(objectives["harbour_enemy"], 1)
+    end
 
     -- Re‑scan on map reload
     local isRescanning = false
@@ -37,6 +41,10 @@ local function boot()
             print("[Main] Map reload — re‑scanning objectives...")
             local objectives = WorldScanner.scan(myTeamName)
             ObjResolver.setObjectives(objectives)
+            RPGWeapon.clearStaticTargets()
+            if objectives["harbour_enemy"] then
+                RPGWeapon.addStaticTarget(objectives["harbour_enemy"], 1)
+            end
             ObjResolver.currentTarget = nil
             ObjResolver.currentObjLabel = nil
             isRescanning = false
