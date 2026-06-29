@@ -95,7 +95,13 @@ local function boot()
 
         local hp = vehicle:FindFirstChild("HP")
         if hp and hp.Value <= 0 then
-            return  -- dead plane – don't move, don't shoot
+            -- Kill all BodyMovers so the plane falls naturally
+            for _, child in ipairs(vehicle:GetDescendants()) do
+            if child:IsA("BodyVelocity") or child:IsA("BodyGyro") or child:IsA("AlignOrientation") or child:IsA("LinearVelocity") or child:IsA("AngularVelocity") then
+                    child:Destroy()
+                end
+            end
+            return  -- no more flight control
         end
 
         local body = vehicle.PrimaryPart
