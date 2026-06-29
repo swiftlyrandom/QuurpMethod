@@ -2,7 +2,7 @@
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local player = Players.LocalPlayer
-local Config = require(script.Parent.VehicleConfig)
+local Config = _G._Modules.VehicleConfig
 
 local PLANE_CONFIG = Config.PLANE_CONFIG
 local PLANE_NAMES  = Config.PLANE_NAMES
