@@ -94,8 +94,16 @@ local function boot()
 
         local target = ObjResolver.getTarget(body, dt)
         if target then
-            target = target + MOVE.getCorkscrewOffset(body.CFrame.LookVector)
-            MOVE.intercept(body, target, Vector3.zero, dt)
+            -- direction toward the real objective
+            local forwardDir = (target - body.Position).Unit
+
+            -- pick a point close ahead (look‑ahead) and apply the corkscrew offset there
+            local LOOK_AHEAD = 80   -- studs – tune this to control spiral tightness
+            local nearPoint  = body.Position + forwardDir * LOOK_AHEAD
+            local offset     = MOVE.getCorkscrewOffset(forwardDir)
+            local spiralAim  = nearPoint + offset
+
+            MOVE.intercept(body, spiralAim, Vector3.zero, dt)
         else
             MOVE.cruise(body)
         end
