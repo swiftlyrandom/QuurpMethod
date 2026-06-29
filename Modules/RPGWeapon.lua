@@ -1,14 +1,17 @@
--- RPGWeapon.lua – Auto‑equip & fire RPG at the closest fast‑moving enemy
+-- RPGWeapon.lua – Auto‑equip & fire RPG at enemies + static objectives (harbour)
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local player = Players.LocalPlayer
 
 local RPGWeapon = {}
 local bulletSpeed = 225
-local fireCooldown = 3
+local fireCooldown = 0.2
 local maxRange = 2000
 local minSpeed = 100
 local lastFireTime = 0
+
+-- Static targets (e.g. enemy harbour)
+local staticTargets = {}
 
 -- ---- Prediction (unchanged) ----
 local function solveQuadratic(a, b, c)
@@ -37,7 +40,6 @@ local function equipTool(toolName)
     local humanoid = character:FindFirstChildOfClass("Humanoid")
     if not humanoid then return end
 
-    -- Already holding the right tool
     local equipped = character:FindFirstChildOfClass("Tool")
     if equipped and equipped.Name == toolName then
         return equipped
@@ -48,34 +50,12 @@ local function equipTool(toolName)
 
     local tool = backpack:FindFirstChild(toolName) or character:FindFirstChild(toolName)
     if not tool then
-        return nil  -- tool not available
+        return nil
     end
 
     humanoid:UnequipTools()
     humanoid:EquipTool(tool)
     return tool
-end
-
--- ---- Target selection ----
-local function getClosestValidTarget(origin)
-    local closest, closestDist = nil, maxRange
-    for _, plr in ipairs(Players:GetPlayers()) do
-        if plr ~= player and plr.Team ~= player.Team then
-            local char = plr.Character
-            local hrp = char and char:FindFirstChild("HumanoidRootPart")
-            if hrp then
-                local vel = hrp.AssemblyLinearVelocity
-                if vel.Magnitude > minSpeed then
-                    local dist = (hrp.Position - origin).Magnitude
-                    if dist < closestDist then
-                        closestDist = dist
-                        closest = hrp
-                    end
-                end
-            end
-        end
-    end
-    return closest
 end
 
 -- ---- Fire one shot ----
@@ -86,25 +66,72 @@ local function fireAt(aimPos)
     end
 end
 
+-- ---- Add / remove static targets ----
+function RPGWeapon.addStaticTarget(pos, priority)
+    table.insert(staticTargets, {position = pos, priority = priority or 1})
+end
+
+function RPGWeapon.clearStaticTargets()
+    staticTargets = {}
+end
+
 -- ---- Called every heartbeat from MainController ----
 function RPGWeapon.update(vehicleBody)
     local now = tick()
     if now - lastFireTime < fireCooldown then return end
 
     local tool = equipTool("RPG")
-    if not tool then return end   -- can't fire without the tool
+    if not tool then return end
 
-    local targetHRP = getClosestValidTarget(vehicleBody.Position)
-    if not targetHRP then return end
+    local origin = vehicleBody.Position
 
-    local aimPos = getAimPosition(
-        vehicleBody.Position,
-        targetHRP.Position,
-        targetHRP.AssemblyLinearVelocity
-    )
-    if aimPos then
-        fireAt(aimPos)
+    -- 1) Check static targets (e.g. enemy harbour) within range
+    local bestStatic = nil
+    local bestStaticDist = maxRange
+    for _, st in ipairs(staticTargets) do
+        local d = (st.position - origin).Magnitude
+        if d < bestStaticDist then
+            bestStaticDist = d
+            bestStatic = st.position
+        end
+    end
+
+    if bestStatic then
+        fireAt(bestStatic)
         lastFireTime = now
+        return
+    end
+
+    -- 2) Check moving enemies
+    local targetHRP = nil
+    local targetDist = maxRange
+    for _, plr in ipairs(Players:GetPlayers()) do
+        if plr ~= player and plr.Team ~= player.Team then
+            local char = plr.Character
+            local hrp = char and char:FindFirstChild("HumanoidRootPart")
+            if hrp then
+                local vel = hrp.AssemblyLinearVelocity
+                if vel.Magnitude > minSpeed then
+                    local dist = (hrp.Position - origin).Magnitude
+                    if dist < targetDist then
+                        targetDist = dist
+                        targetHRP = hrp
+                    end
+                end
+            end
+        end
+    end
+
+    if targetHRP then
+        local aimPos = getAimPosition(
+            origin,
+            targetHRP.Position,
+            targetHRP.AssemblyLinearVelocity
+        )
+        if aimPos then
+            fireAt(aimPos)
+            lastFireTime = now
+        end
     end
 end
 
