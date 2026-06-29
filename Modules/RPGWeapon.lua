@@ -1,4 +1,4 @@
--- RPGWeapon.lua – Auto-shoots RPG at closest fast-moving enemy
+-- RPGWeapon.lua – Auto‑equip & fire RPG at the closest fast‑moving enemy
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local player = Players.LocalPlayer
@@ -7,9 +7,10 @@ local RPGWeapon = {}
 local bulletSpeed = 225
 local fireCooldown = 0.2
 local maxRange = 1800
-local minSpeed = 100            -- only target enemies moving faster than this
+local minSpeed = 100
+local lastFireTime = 0
 
--- ----- prediction maths (from your script) -----
+-- ---- Prediction (unchanged) ----
 local function solveQuadratic(a, b, c)
     local d = b*b - 4*a*c
     if d < 0 then return nil end
@@ -26,10 +27,36 @@ local function getAimPosition(gunPos, targetPos, targetVel)
     local c = dp:Dot(dp)
     local t = solveQuadratic(a, b, c)
     if not t then return nil end
-    return targetPos + targetVel * t       -- no acceleration term
+    return targetPos + targetVel * t
 end
 
--- ----- target selection -----
+-- ---- Tool handling ----
+local function equipTool(toolName)
+    local character = player.Character
+    if not character then return end
+    local humanoid = character:FindFirstChildOfClass("Humanoid")
+    if not humanoid then return end
+
+    -- Already holding the right tool
+    local equipped = character:FindFirstChildOfClass("Tool")
+    if equipped and equipped.Name == toolName then
+        return equipped
+    end
+
+    local backpack = player:FindFirstChild("Backpack")
+    if not backpack then return end
+
+    local tool = backpack:FindFirstChild(toolName) or character:FindFirstChild(toolName)
+    if not tool then
+        return nil  -- tool not available
+    end
+
+    humanoid:UnequipTools()
+    humanoid:EquipTool(tool)
+    return tool
+end
+
+-- ---- Target selection ----
 local function getClosestValidTarget(origin)
     local closest, closestDist = nil, maxRange
     for _, plr in ipairs(Players:GetPlayers()) do
@@ -51,7 +78,7 @@ local function getClosestValidTarget(origin)
     return closest
 end
 
--- ----- fire one shot -----
+-- ---- Fire one shot ----
 local function fireAt(aimPos)
     local event = ReplicatedStorage:FindFirstChild("Event")
     if event then
@@ -59,8 +86,14 @@ local function fireAt(aimPos)
     end
 end
 
--- ----- called every heartbeat from MainController -----
+-- ---- Called every heartbeat from MainController ----
 function RPGWeapon.update(vehicleBody)
+    local now = tick()
+    if now - lastFireTime < fireCooldown then return end
+
+    local tool = equipTool("RPG")
+    if not tool then return end   -- can't fire without the tool
+
     local targetHRP = getClosestValidTarget(vehicleBody.Position)
     if not targetHRP then return end
 
@@ -71,6 +104,7 @@ function RPGWeapon.update(vehicleBody)
     )
     if aimPos then
         fireAt(aimPos)
+        lastFireTime = now
     end
 end
 
