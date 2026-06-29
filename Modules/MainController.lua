@@ -112,3 +112,4 @@ local ok, err = pcall(boot)
 if not ok then
     warn("[MainController] Boot failed:", err)
 end
+return {}
