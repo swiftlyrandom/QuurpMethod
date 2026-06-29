@@ -17,6 +17,8 @@ return {
         debugPrint     = false,
         offsetRangeMin = -300,
         offsetRangeMax = 300,
+        corkscrewRadius     = 30,   -- studs
+        corkscrewDegPerSec  = 120,  -- degrees per second of rotation
     },
 
     PLANE_NAMES = {
