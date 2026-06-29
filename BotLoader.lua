@@ -18,6 +18,7 @@ local LOAD_ORDER = {
     "AutoSeater",
     "ObjectiveResolver",
     "NetworkController",
+    "RPGWeapon",
     "MainController",
 }
 
