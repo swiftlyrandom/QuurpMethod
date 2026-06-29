@@ -96,6 +96,12 @@ local function boot()
         else
             MOVE.cruise(body)
         end
+
+        local rpgConfig = Config.RPG_CONFIG
+        if rpgConfig and rpgConfig.enabled then
+            RPGWeapon.update(body)
+        end
+            
     end)
 end
 
