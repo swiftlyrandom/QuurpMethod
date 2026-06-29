@@ -9,6 +9,7 @@ local scanObjectives = _G._Modules.WorldScanner
 local AutoSeater   = _G._Modules.AutoSeater
 local ObjResolver  = _G._Modules.ObjectiveResolver
 local Network      = _G._Modules.NetworkController
+local RPGWeapon = _G._Modules.RPGWeapon
 
 local NETWORK_INTERVAL = 1.0
 local lastNetworkCheck = 0
