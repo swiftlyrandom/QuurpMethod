@@ -5,7 +5,7 @@ local player = Players.LocalPlayer
 
 local Config       = _G._Modules.VehicleConfig
 local MOVE         = _G._Modules.MovementController
-local scanObjectives = _G._Modules.WorldScanner
+local WorldScanner = _G._Modules.WorldScanner
 local AutoSeater   = _G._Modules.AutoSeater
 local ObjResolver  = _G._Modules.ObjectiveResolver
 local Network      = _G._Modules.NetworkController
@@ -23,7 +23,7 @@ local function boot()
     Network.BOT_ID = player.Name
     Network.register(Network.BOT_ID, myTeamName)
 
-    local objectives = scanObjectives(myTeamName)
+    local objectives = WorldScanner.scan(myTeamName)
     ObjResolver.setObjectives(objectives)
 
     -- Re‑scan on map reload
@@ -35,7 +35,7 @@ local function boot()
         task.spawn(function()
             task.wait(3)
             print("[Main] Map reload — re‑scanning objectives...")
-            objectives = scanObjectives(myTeamName)
+            local objectives = WorldScanner.scan(myTeamName)
             ObjResolver.setObjectives(objectives)
             ObjResolver.currentTarget = nil
             ObjResolver.currentObjLabel = nil
