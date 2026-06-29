@@ -93,6 +93,11 @@ local function boot()
         local vehicle = AutoSeater.getVehicle()
         if not vehicle or not vehicle.Parent then return end
 
+        local hp = vehicle:FindFirstChild("HP")
+        if hp and hp.Value <= 0 then
+            return  -- dead plane – don't move, don't shoot
+        end
+
         local body = vehicle.PrimaryPart
             or vehicle:FindFirstChild("MainBody")
             or vehicle:FindFirstChildWhichIsA("BasePart")
