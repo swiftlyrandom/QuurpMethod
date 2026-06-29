@@ -87,6 +87,11 @@ local function findExistingVehicle()
 end
 
 function startAutoSeater()
+    local role = Config.PLANE_CONFIG.role or "pilot"
+    if role == "gunner" then
+        print("[AutoSeater] Gunner role – skipping vehicle spawn/seating.")
+        return
+    end
     workspace.ChildAdded:Connect(function(child)
         if not PLANE_NAMES[child.Name] then return end
         task.wait(0.5)
