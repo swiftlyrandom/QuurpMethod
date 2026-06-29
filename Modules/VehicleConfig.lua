@@ -1,9 +1,11 @@
--- VehicleConfig.lua
+-- VehicleConfig.lua (fixed)
+local BASE_URL = "https://scholar-sustained-wasp.ngrok-free.dev"
+
 return {
-    BASE_URL      = "https://scholar-sustained-wasp.ngrok-free.dev",
-    REGISTER_URL  = function() return VehicleConfig.BASE_URL .. "/register" end,
-    ACK_URL       = function() return VehicleConfig.BASE_URL .. "/ack-team" end,
-    COMMAND_URL   = function() return VehicleConfig.BASE_URL .. "/get-command" end,
+    BASE_URL      = BASE_URL,
+    REGISTER_URL  = BASE_URL .. "/register",
+    ACK_URL       = BASE_URL .. "/ack-team",
+    COMMAND_URL   = BASE_URL .. "/get-command",
 
     PLANE_CONFIG = {
         difficulty     = "Elite",
