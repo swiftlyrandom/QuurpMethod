@@ -1,17 +1,18 @@
 -- ============================================================
 --  BootLoader.lua  (QuurpMethod Vehicle Controller)
 --  Place in your executor. Fetches all modules from GitHub,
---  loads them in order, then boots the main controller.
+--  detects role (pilot / gunner) from MasterControl, then boots
+--  the appropriate controller.
 -- ============================================================
 
 -- ===== CONFIG =====
 local GITHUB_USER   = "swiftlyrandom"
 local GITHUB_REPO   = "QuurpMethod"
 local GITHUB_BRANCH = "main"
-local MODULES_PATH  = "Modules"          -- folder containing all .lua files
+local MODULES_PATH  = "Modules"
 
--- Module file names (without .lua) – load order matters!
-local LOAD_ORDER = {
+-- Modules that BOTH pilot and gunner need
+local SHARED_MODULES = {
     "VehicleConfig",
     "PredictionUtils",
     "MovementController",
@@ -21,7 +22,6 @@ local LOAD_ORDER = {
     "NetworkController",
     "RPGWeapon",
     "GunnerController",
-    "MainController",
 }
 
 -- ===== GITHUB URL =====
@@ -49,13 +49,12 @@ local function fetchModule(name)
         error(string.format("[BootLoader] HTTP %d for: %s", result.StatusCode, url))
     end
 
-    -- Compile & run in the global environment
     local fn, err = loadstring(result.Body, name)
     if not fn then
         error("[BootLoader] Compile error in " .. name .. ": " .. tostring(err))
     end
 
-    local mod = fn()   -- each module must return a table
+    local mod = fn()
     if type(mod) ~= "table" then
         error("[BootLoader] " .. name .. " did not return a table.")
     end
@@ -64,14 +63,29 @@ local function fetchModule(name)
     print("[BootLoader] Loaded:", name)
 end
 
--- After the fetchModule loop
+-- ===== MAIN =====
+print("[BootLoader] Starting module load...")
+
+for _, name in ipairs(SHARED_MODULES) do
+    local success, err = pcall(fetchModule, name)
+    if not success then
+        warn("[BootLoader] Failed to load " .. name .. ": " .. tostring(err))
+        return
+    end
+end
+
+-- ===== ROLE DETECTION =====
+local player = game:GetService("Players").LocalPlayer
 local HttpService = game:GetService("HttpService")
 local Network = _G._Modules.NetworkController
 
 local botId = player.Name
-Network.register(botId, player.Team and player.Team.Name or "Unknown")
+local teamName = player.Team and player.Team.Name or "Unknown"
 
--- Small delay for the registration to be processed and for you to set pairing
+-- Register with MasterControl (so we appear in the instance list)
+Network.register(botId, teamName)
+
+-- Give the server a moment, then check our own command
 task.wait(3)
 
 local function getRole()
@@ -79,7 +93,8 @@ local function getRole()
         _G._Modules.VehicleConfig.COMMAND_URL,
         HttpService:UrlEncode(botId))
     local ok, resp = pcall(function()
-        return request({Url=url, Method="GET", Headers={["ngrok-skip-browser-warning"]="true"}})
+        return request({ Url = url, Method = "GET",
+                         Headers = { ["ngrok-skip-browser-warning"] = "true" } })
     end)
     if ok and resp and resp.StatusCode == 200 then
         local data = HttpService:JSONDecode(resp.Body)
@@ -94,31 +109,19 @@ local role = getRole()
 print("[BootLoader] Detected role:", role)
 
 if role == "gunner" then
+    -- Run gunner controller only – no flight code
+    print("[BootLoader] Starting GunnerController...")
     _G._Modules.GunnerController.start()
-    return   -- do NOT run MainController
+    return  -- stop here, do NOT load MainController
 end
 
--- Otherwise, run the pilot
--- MainController.boot() is already called at the bottom of MainController.lua
--- so just require it:
-_G._Modules.MainController  -- its file already runs boot()
-
--- ===== MAIN =====
-print("[BootLoader] Starting module load...")
-
-for _, name in ipairs(LOAD_ORDER) do
-    local success, err = pcall(fetchModule, name)
-    if not success then
-        warn("[BootLoader] Failed to load " .. name .. ": " .. tostring(err))
-        return
-    end
+-- ===== PILOT PATH =====
+print("[BootLoader] Loading MainController for pilot...")
+local success, err = pcall(fetchModule, "MainController")
+if not success then
+    warn("[BootLoader] Failed to load MainController: " .. tostring(err))
+    return
 end
 
-print("[BootLoader] All modules loaded. Booting MainController...")
-
--- MainController's boot is triggered automatically (its file runs at once)
--- or you can call a boot function if you prefer.
--- The MainController.lua already contains a boot() call at the bottom,
--- so it will run on load.
-
-print("[BootLoader] BootLoader finished.")
+-- MainController.lua already calls boot() at the bottom
+print("[BootLoader] Pilot booted.")
