@@ -137,7 +137,7 @@ local function boot()
             local nearPoint = body.Position + forwardDir * 80
             local corkscrewOffset = MOVE.getCorkscrewOffset(forwardDir)
             if combatTarget then
-                corkscrewOffset = corkscrewOffset * 0.3   -- tighter during combat chase
+                corkscrewOffset = corkscrewOffset * 0.05   -- tighter during combat chase
             end
             target = nearPoint + corkscrewOffset
             MOVE.intercept(body, target, Vector3.zero, dt)
