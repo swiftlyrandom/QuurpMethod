@@ -73,11 +73,15 @@ function CombatBrain.update(body, dt)
         return Vector3.new(enemyPos.X, targetY, enemyPos.Z)
 
     else  -- "break"
-        -- Disengage behind the plane with a climb and randomised lateral offset
-        local behind = body.CFrame.LookVector * -200          -- 200 studs behind
-        local lateral = body.CFrame.RightVector * (150 * breakDirection)  -- left/right offset
-        local climb = Vector3.new(0, 150, 0)                  -- climb
-        local breakTarget = body.Position + behind + lateral + climb
+        -- Disengage away from the enemy, not from our own facing.
+        -- This gives a stable world-space point that doesn't oscillate.
+        local awayFromEnemy = (body.Position - enemyPos).Unit
+        if awayFromEnemy.Magnitude < 0.1 then
+            awayFromEnemy = Vector3.new(1, 0, 0)
+        end
+        local lateral = Vector3.new(-awayFromEnemy.Z, 0, awayFromEnemy.X).Unit * (150 * breakDirection)
+        local climb = Vector3.new(0, 150, 0)
+        local breakTarget = body.Position + awayFromEnemy * 200 + lateral + climb
         return breakTarget
     end
 end
