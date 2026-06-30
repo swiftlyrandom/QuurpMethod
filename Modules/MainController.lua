@@ -10,6 +10,7 @@ local AutoSeater   = _G._Modules.AutoSeater
 local ObjResolver  = _G._Modules.ObjectiveResolver
 local Network      = _G._Modules.NetworkController
 local RPGWeapon    = _G._Modules.RPGWeapon
+local CombatBrain  = _G._Modules.CombatBrain
 
 local NETWORK_INTERVAL = 1.0
 local lastNetworkCheck = 0
@@ -112,7 +113,16 @@ local function boot()
 
         MOVE.tickCorkscrew(dt)
 
-        local target = ObjResolver.getTarget(body, dt)
+        -- Decide what to fly toward
+        local target
+        local combatTarget = CombatBrain.update(body, dt)
+        if combatTarget then
+            target = combatTarget                -- orbiting an enemy
+        else
+            target = ObjResolver.getTarget(body, dt)   -- mission objective or cruise
+        end
+
+        -- Apply corkscrew and move
         if target then
             local forwardDir = (target - body.Position).Unit
             local nearPoint = body.Position + forwardDir * 80
@@ -121,13 +131,12 @@ local function boot()
         else
             MOVE.cruise(body)
         end
-
-        local rpgConfig = Config.RPG_CONFIG
-        if rpgConfig and rpgConfig.enabled then
-            RPGWeapon.update(body)
+                local rpgConfig = Config.RPG_CONFIG
+               if rpgConfig and rpgConfig.enabled then
+                    RPGWeapon.update(body)
+               end
+            end)
         end
-    end)
-end
 
 -- PUBLIC API
 function MainController.start()
