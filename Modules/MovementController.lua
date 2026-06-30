@@ -15,11 +15,12 @@ local MC = {
 }
 
 -- Parabolic path state
-local pathProgress = 0        -- 0 to 1 fraction of the arc completed
-local pathTotalTime = 15      -- seconds for a full arc (adjust as desired)
-local pathStartPos = nil      -- world position where the arc began
-local pathTargetPos = nil     -- final objective position
-local pathTargetAlt = 200     -- commanded altitude at the destination
+local pathProgress = 0
+local pathTotalTime = 15
+local pathStartPos = nil
+local pathTargetPos = nil
+local pathTargetAlt = 1750
+local pathPeakY = nil      -- added: locked peak altitude
 
 local corkscrewAngle = 0
 
