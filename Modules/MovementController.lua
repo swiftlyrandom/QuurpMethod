@@ -14,6 +14,13 @@ local MC = {
     leadCoeff         = 1.2,
 }
 
+-- Parabolic path state
+local pathProgress = 0        -- 0 to 1 fraction of the arc completed
+local pathTotalTime = 15      -- seconds for a full arc (adjust as desired)
+local pathStartPos = nil      -- world position where the arc began
+local pathTargetPos = nil     -- final objective position
+local pathTargetAlt = 200     -- commanded altitude at the destination
+
 local corkscrewAngle = 0
 
 local function setHeading(body, targetPos, lerpFactor)
@@ -115,6 +122,49 @@ function MOVE.getCorkscrewOffset(forward)
     local up = forward:Cross(right).Unit
     local rad = math.rad(corkscrewAngle % 360)
     return (right * math.cos(rad) + up * math.sin(rad)) * radius
+end
+
+-- parabolic aim point: climbs from start to peak, then descends to target
+function MOVE.getParabolicAimPoint(bodyPos, dt)
+    -- If no path is defined, return nil (caller falls back to direct intercept)
+    if not pathStartPos or not pathTargetPos then return nil end
+
+    -- Advance progress
+    pathProgress = pathProgress + (dt / pathTotalTime)
+    if pathProgress >= 1.0 then
+        pathProgress = 1.0
+        -- Once arrived, clear path so we switch to normal orbit/cruise
+        pathStartPos = nil
+        pathTargetPos = nil
+        return nil
+    end
+
+    -- Fraction along the straight line (0 → 1)
+    local t = pathProgress
+
+    -- Base point on the line from start to target (X and Z only)
+    local linePoint = Vector3.new(
+        pathStartPos.X + (pathTargetPos.X - pathStartPos.X) * t,
+        0,   -- Y will be overridden
+        pathStartPos.Z + (pathTargetPos.Z - pathStartPos.Z) * t
+    )
+
+    -- Parabolic height: start at startPos.Y, peak at maxHeight, end at targetAlt
+    local startY = pathStartPos.Y
+    local peakY = math.max(startY, pathTargetAlt) * 2   -- peak at double the higher of start or target
+    local endY = pathTargetAlt
+
+    -- Parabolic interpolation: y = (1-t)^2*startY + 2*(1-t)*t*peakY + t^2*endY
+    local parabolicY = (1-t)*(1-t)*startY + 2*(1-t)*t*peakY + t*t*endY
+
+    return Vector3.new(linePoint.X, parabolicY, linePoint.Z)
+end
+
+function MOVE.setParabolicTarget(startPos, targetPos, targetAlt)
+    pathStartPos = startPos
+    pathTargetPos = targetPos
+    pathTargetAlt = targetAlt
+    pathProgress = 0
 end
 
 return MOVE
