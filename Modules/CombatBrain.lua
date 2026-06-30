@@ -53,6 +53,13 @@ function CombatBrain.update(body, dt)
         combatMode = "chase"
         breakDirection = math.random(0, 1) == 0 and -1 or 1   -- randomise break side
     end
+    if not enemyHRP then
+    currentTargetEnemy = nil
+    hasLock = false
+    combatMode = "chase"
+    return nil, nil
+    end
+    
 
     local enemyPos = enemyHRP.Position
     local dist = (enemyPos - body.Position).Magnitude
@@ -66,15 +73,13 @@ function CombatBrain.update(body, dt)
     end
 
     -- Compute target based on mode
-    local targetY = body.Position.Y   -- maintain current altitude during chase/break
+    local targetY = body.Position.Y
 
     if combatMode == "chase" then
-        -- Directly at enemy – MovementController.intercept handles lead/prediction
-        return Vector3.new(enemyPos.X, targetY, enemyPos.Z)
+        -- Return enemy position + its actual velocity so intercept can lead
+        return Vector3.new(enemyPos.X, targetY, enemyPos.Z), enemyHRP.AssemblyLinearVelocity
 
     else  -- "break"
-        -- Disengage away from the enemy, not from our own facing.
-        -- This gives a stable world-space point that doesn't oscillate.
         local awayFromEnemy = (body.Position - enemyPos).Unit
         if awayFromEnemy.Magnitude < 0.1 then
             awayFromEnemy = Vector3.new(1, 0, 0)
@@ -82,7 +87,7 @@ function CombatBrain.update(body, dt)
         local lateral = Vector3.new(-awayFromEnemy.Z, 0, awayFromEnemy.X).Unit * (150 * breakDirection)
         local climb = Vector3.new(0, 150, 0)
         local breakTarget = body.Position + awayFromEnemy * 200 + lateral + climb
-        return breakTarget
+        return breakTarget, nil   -- no velocity for break point
     end
 end
 
