@@ -18,6 +18,7 @@ local ALL_MODULES = {
     "ObjectiveResolver",
     "NetworkController",
     "RPGWeapon",
+    "CombatBrain",  
     "GunnerController",
     "MainController",
 }
