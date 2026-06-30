@@ -114,7 +114,7 @@ local function boot()
 
         MOVE.tickCorkscrew(dt)
 
-        -- Decide what to fly toward
+               -- Decide what to fly toward
         local target
         local combatTarget = CombatBrain.update(body, dt)
         if combatTarget then
@@ -130,12 +130,16 @@ local function boot()
                 end
             end
         end
-        
-        -- Apply corkscrew and move
+
+        -- Apply corkscrew offset (reduced during chase for tighter aim)
         if target then
             local forwardDir = (target - body.Position).Unit
             local nearPoint = body.Position + forwardDir * 80
-            target = nearPoint + MOVE.getCorkscrewOffset(forwardDir)
+            local corkscrewOffset = MOVE.getCorkscrewOffset(forwardDir)
+            if combatTarget then
+                corkscrewOffset = corkscrewOffset * 0.3   -- tighter during combat chase
+            end
+            target = nearPoint + corkscrewOffset
             MOVE.intercept(body, target, Vector3.zero, dt)
         else
             MOVE.cruise(body)
