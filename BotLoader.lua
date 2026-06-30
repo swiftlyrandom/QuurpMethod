@@ -64,6 +64,45 @@ local function fetchModule(name)
     print("[BootLoader] Loaded:", name)
 end
 
+-- After the fetchModule loop
+local HttpService = game:GetService("HttpService")
+local Network = _G._Modules.NetworkController
+
+local botId = player.Name
+Network.register(botId, player.Team and player.Team.Name or "Unknown")
+
+-- Small delay for the registration to be processed and for you to set pairing
+task.wait(3)
+
+local function getRole()
+    local url = string.format("%s/get-command?id=%s",
+        _G._Modules.VehicleConfig.COMMAND_URL,
+        HttpService:UrlEncode(botId))
+    local ok, resp = pcall(function()
+        return request({Url=url, Method="GET", Headers={["ngrok-skip-browser-warning"]="true"}})
+    end)
+    if ok and resp and resp.StatusCode == 200 then
+        local data = HttpService:JSONDecode(resp.Body)
+        if data and data.pair_with then
+            return "gunner"
+        end
+    end
+    return "pilot"
+end
+
+local role = getRole()
+print("[BootLoader] Detected role:", role)
+
+if role == "gunner" then
+    _G._Modules.GunnerController.start()
+    return   -- do NOT run MainController
+end
+
+-- Otherwise, run the pilot
+-- MainController.boot() is already called at the bottom of MainController.lua
+-- so just require it:
+_G._Modules.MainController  -- its file already runs boot()
+
 -- ===== MAIN =====
 print("[BootLoader] Starting module load...")
 
