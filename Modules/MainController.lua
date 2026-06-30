@@ -11,6 +11,7 @@ local ObjResolver  = _G._Modules.ObjectiveResolver
 local Network      = _G._Modules.NetworkController
 local RPGWeapon    = _G._Modules.RPGWeapon
 local CombatBrain  = _G._Modules.CombatBrain
+local GunSystem    = _G._Modules.GunSystem
 
 local NETWORK_INTERVAL = 1.0
 local lastNetworkCheck = 0
@@ -141,10 +142,18 @@ local function boot()
         else
             MOVE.cruise(body)
         end
-                local rpgConfig = Config.RPG_CONFIG
-               if rpgConfig and rpgConfig.enabled then
-                    RPGWeapon.update(body)
-               end
+                 local rpgConfig = Config.RPG_CONFIG
+                 if rpgConfig and rpgConfig.enabled then
+                     RPGWeapon.update(body)
+                 end
+            
+                 -- Forward guns: fire whenever the nose is on the locked enemy
+                 local lockedEnemy = CombatBrain.getLockedEnemy()
+                 if lockedEnemy then
+                     GunSystem.update(body, lockedEnemy)
+                 else
+                     GunSystem.stopFiring()
+                 end
             end)
         end
 
