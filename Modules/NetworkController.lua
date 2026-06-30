@@ -114,7 +114,8 @@ function module.pollCommands()
            data.mode      or "cruise",
            data.altitude  or 200,
            data.objective,
-           data.team
+           data.team,
+           data.pair_with
 end
 
 return module
