@@ -1,4 +1,4 @@
--- CombatBrain.lua – chase-and-break combat AI for forward guns
+-- CombatBrain.lua – smoothed chase-and-break with timed phases
 local Players = game:GetService("Players")
 local player = Players.LocalPlayer
 
@@ -8,12 +8,20 @@ local MIN_ENEMY_SPEED = 100
 
 local currentTargetEnemy = nil
 local hasLock = false
-local combatMode = "chase"       -- "chase" or "break"
-local breakDirection = 1         -- 1 = right, -1 = left (randomised each break)
+local combatMode = "chase"
+local breakDirection = 1
 
--- Hysteresis thresholds to prevent oscillation
-local CHASE_TO_BREAK_DIST = 200   -- switch to break when closer than this
-local BREAK_TO_CHASE_DIST = 350   -- switch back to chase when farther than this
+-- Timers for chase / break phases (seconds)
+local CHASE_DURATION = 5.0
+local BREAK_DURATION = 2.0
+local phaseTimer = 0
+
+-- Velocity smoothing (exponential moving average)
+local smoothedVelocity = Vector3.zero
+local VEL_SMOOTH_FACTOR = 0.3   -- lower = smoother but more lag
+
+-- Distance thresholds only used to switch break side or force break if too close
+local MIN_DIST = 150   -- if closer than this, force break immediately
 
 local function findClosestEnemy(bodyPos)
     local closest, closestDist = nil, LOCK_RANGE
@@ -39,45 +47,57 @@ function CombatBrain.update(body, dt)
     local enemyHRP = findClosestEnemy(body.Position)
 
     if not enemyHRP then
-        -- No enemy in range – clear lock and revert to objective
         currentTargetEnemy = nil
         hasLock = false
         combatMode = "chase"
-        return nil
+        phaseTimer = 0
+        smoothedVelocity = Vector3.zero
+        return nil, nil
     end
 
-    -- Update lock
+    -- Lock acquisition
     if enemyHRP ~= currentTargetEnemy then
         currentTargetEnemy = enemyHRP
         hasLock = true
         combatMode = "chase"
-        breakDirection = math.random(0, 1) == 0 and -1 or 1   -- randomise break side
+        phaseTimer = 0
+        breakDirection = math.random(0, 1) == 0 and -1 or 1
+        smoothedVelocity = enemyHRP.AssemblyLinearVelocity   -- initialise with current
     end
-    if not enemyHRP then
-    currentTargetEnemy = nil
-    hasLock = false
-    combatMode = "chase"
-    return nil, nil
-    end
-    
+
+    -- Smooth the enemy velocity
+    local rawVel = enemyHRP.AssemblyLinearVelocity
+    smoothedVelocity = smoothedVelocity:Lerp(rawVel, VEL_SMOOTH_FACTOR)
 
     local enemyPos = enemyHRP.Position
     local dist = (enemyPos - body.Position).Magnitude
 
-    -- State transitions with hysteresis
-    if combatMode == "chase" and dist < CHASE_TO_BREAK_DIST then
+    -- Phase timer
+    phaseTimer = phaseTimer + dt
+
+    -- Force break if too close
+    if combatMode == "chase" and dist < MIN_DIST then
         combatMode = "break"
-        breakDirection = math.random(0, 1) == 0 and -1 or 1   -- new random side each break
-    elseif combatMode == "break" and dist > BREAK_TO_CHASE_DIST then
-        combatMode = "chase"
+        phaseTimer = 0
+        breakDirection = math.random(0, 1) == 0 and -1 or 1
     end
 
-    -- Compute target based on mode
+    -- Timed phase transitions
+    if combatMode == "chase" and phaseTimer >= CHASE_DURATION then
+        combatMode = "break"
+        phaseTimer = 0
+        breakDirection = math.random(0, 1) == 0 and -1 or 1
+    elseif combatMode == "break" and phaseTimer >= BREAK_DURATION then
+        combatMode = "chase"
+        phaseTimer = 0
+    end
+
+    -- Compute target
     local targetY = body.Position.Y
 
     if combatMode == "chase" then
-        -- Return enemy position + its actual velocity so intercept can lead
-        return Vector3.new(enemyPos.X, targetY, enemyPos.Z), enemyHRP.AssemblyLinearVelocity
+        -- Use enemy position with smoothed velocity for lead
+        return Vector3.new(enemyPos.X, targetY, enemyPos.Z), smoothedVelocity
 
     else  -- "break"
         local awayFromEnemy = (body.Position - enemyPos).Unit
@@ -87,7 +107,7 @@ function CombatBrain.update(body, dt)
         local lateral = Vector3.new(-awayFromEnemy.Z, 0, awayFromEnemy.X).Unit * (150 * breakDirection)
         local climb = Vector3.new(0, 150, 0)
         local breakTarget = body.Position + awayFromEnemy * 200 + lateral + climb
-        return breakTarget, nil   -- no velocity for break point
+        return breakTarget, nil
     end
 end
 
