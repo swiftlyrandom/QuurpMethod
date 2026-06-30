@@ -119,7 +119,17 @@ local function boot()
         if combatTarget then
             target = combatTarget                -- orbiting an enemy
         else
-            target = ObjResolver.getTarget(body, dt)   -- mission objective or cruise
+            -- Use the parabolic arc if we have an active path
+            target = MOVE.getParabolicAimPoint(body.Position, dt)
+            if not target then
+                -- No active arc – fetch a new objective from the resolver
+                local objTarget = ObjResolver.getTarget(body, dt)
+                if objTarget then
+                    -- Start a new parabolic path toward the objective
+                    MOVE.setParabolicTarget(body.Position, objTarget, ObjResolver.currentAlt)
+                    target = MOVE.getParabolicAimPoint(body.Position, dt)
+                end
+            end
         end
 
         -- Apply corkscrew and move
