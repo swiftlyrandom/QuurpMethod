@@ -114,14 +114,16 @@ local function boot()
 
         MOVE.tickCorkscrew(dt)
 
-               -- Decide what to fly toward
-        local target
-        local combatTarget = CombatBrain.update(body, dt)
+        -- Decide what to fly toward
+        local target, targetVel
+        local combatTarget, combatVel = CombatBrain.update(body, dt)
         if combatTarget then
             target = combatTarget
+            targetVel = combatVel or Vector3.zero
         else
             -- Only use parabolic arc if NOT in combat
             target = MOVE.getParabolicAimPoint(body.Position, dt)
+            targetVel = Vector3.zero
             if not target then
                 local objTarget = ObjResolver.getTarget(body, dt)
                 if objTarget then
