@@ -12,6 +12,8 @@ local orbitAngle = 0
 local hasLock = false
 
 -- find nearest enemy HRP within LOCK_RANGE
+local MIN_ENEMY_SPEED = 100   -- match RPGWeapon threshold
+
 local function findClosestEnemy(bodyPos)
     local closest, closestDist = nil, LOCK_RANGE
     for _, plr in ipairs(Players:GetPlayers()) do
@@ -20,6 +22,8 @@ local function findClosestEnemy(bodyPos)
         local char = plr.Character
         local hrp = char and char:FindFirstChild("HumanoidRootPart")
         if hrp then
+            local speed = hrp.AssemblyLinearVelocity.Magnitude
+            if speed < MIN_ENEMY_SPEED then continue end   -- <-- speed filter
             local dist = (hrp.Position - bodyPos).Magnitude
             if dist < closestDist then
                 closestDist = dist
