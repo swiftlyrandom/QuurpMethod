@@ -13,12 +13,14 @@ local MODULES_PATH  = "Modules"          -- folder containing all .lua files
 -- Module file names (without .lua) – load order matters!
 local LOAD_ORDER = {
     "VehicleConfig",
+    "PredictionUtils",
     "MovementController",
     "WorldScanner",
     "AutoSeater",
     "ObjectiveResolver",
     "NetworkController",
     "RPGWeapon",
+    "GunnerController",
     "MainController",
 }
 
