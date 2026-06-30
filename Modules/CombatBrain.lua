@@ -1,18 +1,19 @@
--- CombatBrain.lua – deterministic orbit around nearest enemy within range
+-- CombatBrain.lua – chase-and-break combat AI for forward guns
 local Players = game:GetService("Players")
 local player = Players.LocalPlayer
 
 local CombatBrain = {}
 local LOCK_RANGE = 1200
-local ORBIT_RADIUS = 250
-local ORBIT_SPEED = 0.5   -- rad/s around enemy
+local MIN_ENEMY_SPEED = 100
 
-local currentTargetEnemy = nil   -- HRP of locked enemy
-local orbitAngle = 0
+local currentTargetEnemy = nil
 local hasLock = false
+local combatMode = "chase"       -- "chase" or "break"
+local breakDirection = 1         -- 1 = right, -1 = left (randomised each break)
 
--- find nearest enemy HRP within LOCK_RANGE
-local MIN_ENEMY_SPEED = 100   -- match RPGWeapon threshold
+-- Hysteresis thresholds to prevent oscillation
+local CHASE_TO_BREAK_DIST = 200   -- switch to break when closer than this
+local BREAK_TO_CHASE_DIST = 350   -- switch back to chase when farther than this
 
 local function findClosestEnemy(bodyPos)
     local closest, closestDist = nil, LOCK_RANGE
@@ -23,7 +24,7 @@ local function findClosestEnemy(bodyPos)
         local hrp = char and char:FindFirstChild("HumanoidRootPart")
         if hrp then
             local speed = hrp.AssemblyLinearVelocity.Magnitude
-            if speed < MIN_ENEMY_SPEED then continue end   -- <-- speed filter
+            if speed < MIN_ENEMY_SPEED then continue end
             local dist = (hrp.Position - bodyPos).Magnitude
             if dist < closestDist then
                 closestDist = dist
@@ -34,39 +35,51 @@ local function findClosestEnemy(bodyPos)
     return closest
 end
 
--- Called every heartbeat from MainController
 function CombatBrain.update(body, dt)
     local enemyHRP = findClosestEnemy(body.Position)
 
-    if enemyHRP then
-        if enemyHRP ~= currentTargetEnemy then
-            -- new enemy – set orbit starting angle based on current relative position
-            currentTargetEnemy = enemyHRP
-            local toEnemy = enemyHRP.Position - body.Position
-            orbitAngle = math.atan2(toEnemy.Z, toEnemy.X)  -- start from approach direction
-            hasLock = true
-        else
-            -- same enemy – advance orbit
-            orbitAngle = orbitAngle + ORBIT_SPEED * dt
-        end
-    else
-        -- no enemy in range → lose lock, revert to objective
+    if not enemyHRP then
+        -- No enemy in range – clear lock and revert to objective
         currentTargetEnemy = nil
         hasLock = false
+        combatMode = "chase"
+        return nil
     end
 
-    if hasLock and currentTargetEnemy then
-        local enemyPos = currentTargetEnemy.Position
-        local targetY = body.Position.Y   -- maintain current altitude
-        local offset = Vector3.new(
-            math.cos(orbitAngle) * ORBIT_RADIUS,
-            0,
-            math.sin(orbitAngle) * ORBIT_RADIUS
-        )
-        return Vector3.new(enemyPos.X + offset.X, targetY, enemyPos.Z + offset.Z)
+    -- Update lock
+    if enemyHRP ~= currentTargetEnemy then
+        currentTargetEnemy = enemyHRP
+        hasLock = true
+        combatMode = "chase"
+        breakDirection = math.random(0, 1) == 0 and -1 or 1   -- randomise break side
     end
 
-    return nil   -- fall back to objective
+    local enemyPos = enemyHRP.Position
+    local dist = (enemyPos - body.Position).Magnitude
+
+    -- State transitions with hysteresis
+    if combatMode == "chase" and dist < CHASE_TO_BREAK_DIST then
+        combatMode = "break"
+        breakDirection = math.random(0, 1) == 0 and -1 or 1   -- new random side each break
+    elseif combatMode == "break" and dist > BREAK_TO_CHASE_DIST then
+        combatMode = "chase"
+    end
+
+    -- Compute target based on mode
+    local targetY = body.Position.Y   -- maintain current altitude during chase/break
+
+    if combatMode == "chase" then
+        -- Directly at enemy – MovementController.intercept handles lead/prediction
+        return Vector3.new(enemyPos.X, targetY, enemyPos.Z)
+
+    else  -- "break"
+        -- Disengage behind the plane with a climb and randomised lateral offset
+        local behind = body.CFrame.LookVector * -200          -- 200 studs behind
+        local lateral = body.CFrame.RightVector * (150 * breakDirection)  -- left/right offset
+        local climb = Vector3.new(0, 150, 0)                  -- climb
+        local breakTarget = body.Position + behind + lateral + climb
+        return breakTarget
+    end
 end
 
 function CombatBrain.getLockedEnemy()
