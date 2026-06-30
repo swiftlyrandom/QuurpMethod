@@ -14,6 +14,12 @@ local RPGWeapon    = _G._Modules.RPGWeapon
 local NETWORK_INTERVAL = 1.0
 local lastNetworkCheck = 0
 
+-- MainController.lua – wrapped for dynamic start/stop
+
+local MainController = {}
+local heartbeatConnection = nil
+local networkPollConnection = nil
+
 local function boot()
     print("[Main] Waiting for team...")
     while not player.Team do task.wait(0.5) end
@@ -25,7 +31,7 @@ local function boot()
 
     local objectives = WorldScanner.scan(myTeamName)
     ObjResolver.setObjectives(objectives)
-    
+
     if objectives["harbour_enemy"] then
         RPGWeapon.addStaticTarget(objectives["harbour_enemy"], 1)
     end
@@ -41,35 +47,33 @@ local function boot()
             print("[Main] Map reload — re‑scanning objectives...")
             local objectives = WorldScanner.scan(myTeamName)
             ObjResolver.setObjectives(objectives)
+            ObjResolver.currentTarget = nil
+            ObjResolver.currentObjLabel = nil
             RPGWeapon.clearStaticTargets()
             if objectives["harbour_enemy"] then
                 RPGWeapon.addStaticTarget(objectives["harbour_enemy"], 1)
             end
-            ObjResolver.currentTarget = nil
-            ObjResolver.currentObjLabel = nil
             isRescanning = false
         end)
     end)
 
     AutoSeater.start()
-    -- Try to seat immediately if a vehicle exists
     local veh = AutoSeater.getVehicle()
     if not veh then
-        -- spawnVehicle is called inside AutoSeater.start's periodic check
+        -- spawn is handled inside AutoSeater.start's periodic check
     end
 
     print("[Main] Main loop starting...")
 
-    RunService.Heartbeat:Connect(function(dt)
+    -- Heartbeat for flight + RPG
+    heartbeatConnection = RunService.Heartbeat:Connect(function(dt)
         lastNetworkCheck = lastNetworkCheck + dt
         if lastNetworkCheck >= NETWORK_INTERVAL then
             lastNetworkCheck = 0
             task.spawn(function()
                 local success, mode, altitude, objLabel, reqTeam = Network.pollCommands()
                 if not success then return end
-
                 if reqTeam and reqTeam ~= "" and reqTeam ~= player.Team.Name then
-                    -- Team change takes priority, pause other updates
                     print("[Main] Team change requested:", reqTeam)
                     Network.walkAndChangeTeam(reqTeam, function()
                         local newTeam = player.Team and player.Team.Name or reqTeam
@@ -77,13 +81,11 @@ local function boot()
                     end)
                     return
                 end
-
                 if mode ~= ObjResolver.mode then
                     print("[Main] Mode:", ObjResolver.mode:upper(), "→", mode:upper())
                 end
                 ObjResolver.mode = mode
                 ObjResolver.currentAlt = altitude
-
                 if mode == "objective" and objLabel then
                     ObjResolver.resolveObjective(objLabel, altitude)
                 end
@@ -95,13 +97,12 @@ local function boot()
 
         local hp = vehicle:FindFirstChild("HP")
         if hp and hp.Value <= 0 then
-            -- Kill all BodyMovers so the plane falls naturally
             for _, child in ipairs(vehicle:GetDescendants()) do
                 if child:IsA("BodyVelocity") or child:IsA("BodyGyro") or child:IsA("AlignOrientation") or child:IsA("LinearVelocity") or child:IsA("AngularVelocity") then
                     child:Destroy()
                 end
             end
-            return  -- no more flight control
+            return
         end
 
         local body = vehicle.PrimaryPart
@@ -113,16 +114,10 @@ local function boot()
 
         local target = ObjResolver.getTarget(body, dt)
         if target then
-            -- direction toward the real objective
             local forwardDir = (target - body.Position).Unit
-
-            -- pick a point close ahead (look‑ahead) and apply the corkscrew offset there
-            local LOOK_AHEAD = 80   -- studs – tune this to control spiral tightness
-            local nearPoint  = body.Position + forwardDir * LOOK_AHEAD
-            local offset     = MOVE.getCorkscrewOffset(forwardDir)
-            local spiralAim  = nearPoint + offset
-
-            MOVE.intercept(body, spiralAim, Vector3.zero, dt)
+            local nearPoint = body.Position + forwardDir * 80
+            target = nearPoint + MOVE.getCorkscrewOffset(forwardDir)
+            MOVE.intercept(body, target, Vector3.zero, dt)
         else
             MOVE.cruise(body)
         end
@@ -134,8 +129,28 @@ local function boot()
     end)
 end
 
-local ok, err = pcall(boot)
-if not ok then
-    warn("[MainController] Boot failed:", err)
+-- PUBLIC API
+function MainController.start()
+    if heartbeatConnection then return end  -- already running
+    boot()
 end
-return {}
+
+function MainController.stop()
+    if heartbeatConnection then
+        heartbeatConnection:Disconnect()
+        heartbeatConnection = nil
+    end
+    -- Kill the vehicle if we own one
+    local vehicle = AutoSeater.getVehicle()
+    if vehicle then
+        -- Remove BodyMovers so it falls/dies
+        for _, child in ipairs(vehicle:GetDescendants()) do
+            if child:IsA("BodyVelocity") or child:IsA("BodyGyro") or child:IsA("AlignOrientation") or child:IsA("LinearVelocity") or child:IsA("AngularVelocity") then
+                child:Destroy()
+            end
+        end
+    end
+    print("[Main] Stopped.")
+end
+
+return MainController
