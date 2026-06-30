@@ -69,4 +69,11 @@ function CombatBrain.update(body, dt)
     return nil   -- fall back to objective
 end
 
+function CombatBrain.getLockedEnemy()
+    if hasLock and currentTargetEnemy and currentTargetEnemy.Parent then
+        return currentTargetEnemy
+    end
+    return nil
+end
+
 return CombatBrain
