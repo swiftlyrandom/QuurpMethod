@@ -184,4 +184,10 @@ local function start()
 end
 
 -- Do NOT auto-start; BootLoader will call start() if role is gunner
-return { start = start }
+return {
+    start = start,
+    stop = function()
+        stopEngagement()
+        print("[Gunner] Stopped.")
+    end
+}
