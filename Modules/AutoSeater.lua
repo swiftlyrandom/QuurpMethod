@@ -22,26 +22,71 @@ end
 local function getSpawnPart()
     local teamName = player.Team and player.Team.Name or ""
     local dockName = teamName:lower():find("japan") and "JapanDock" or "USDock"
+    print("[AutoSeater] Looking for dock:", dockName)
+
     local dock = workspace:FindFirstChild(dockName)
-    if not dock then return end
+    if not dock then
+        warn("[AutoSeater] Dock not found:", dockName)
+        return nil
+    end
+
     local vsp = dock:FindFirstChild("VehicleSP")
-    if not vsp then return end
-    return vsp:FindFirstChild("Airport")
+    if not vsp then
+        warn("[AutoSeater] VehicleSP not found inside", dockName)
+        return nil
+    end
+
+    local airport = vsp:FindFirstChild("Airport")
+    if not airport then
+        warn("[AutoSeater] Airport not found inside VehicleSP")
+        return nil
+    end
+
+    print("[AutoSeater] Airport found:", airport:GetFullName())
+    return airport
 end
 
 local function spawnVehicle()
-    if tick() - lastSpawnTime < SPAWN_COOLDOWN then return end
-    if currentVehicle and currentVehicle.Parent then return end
+    if tick() - lastSpawnTime < SPAWN_COOLDOWN then
+        print("[AutoSeater] Spawn cooldown active, skipping")
+        return
+    end
+    if currentVehicle and currentVehicle.Parent then
+        print("[AutoSeater] Already have a vehicle, skipping spawn")
+        return
+    end
+
+    print("[AutoSeater] Attempting to spawn vehicle...")
+
     local spawnPart = getSpawnPart()
-    if not spawnPart then return end
-    lastSpawnTime = tick()
+    if not spawnPart then
+        warn("[AutoSeater] getSpawnPart() returned nil – check dock, VehicleSP, Airport")
+        return
+    end
+    print("[AutoSeater] Spawn part found:", spawnPart:GetFullName())
+
     local ev = ReplicatedStorage:FindFirstChild("Event")
-    if not ev then return end
-    pcall(function()
-        local price = PLANE_CONFIG.vehiclePrice or 2   -- fallback to 2 if not set
-        ev:FireServer("VSpawn", { spawnPart, PLANE_CONFIG.vehicleName, price })
+    if not ev then
+        warn("[AutoSeater] ReplicatedStorage.Event not found!")
+        return
+    end
+    print("[AutoSeater] RemoteEvent found")
+
+    local vehicleName = PLANE_CONFIG.vehicleName or "Bomber"
+    local vehiclePrice = PLANE_CONFIG.vehiclePrice or 2
+    print("[AutoSeater] Spawning:", vehicleName, "price:", vehiclePrice)
+
+    lastSpawnTime = tick()
+
+    local success, err = pcall(function()
+        ev:FireServer("VSpawn", { spawnPart, vehicleName, vehiclePrice })
     end)
-    print("[AutoSeater] Spawn requested:", PLANE_CONFIG.vehicleName)
+
+    if not success then
+        warn("[AutoSeater] FireServer error:", err)
+    else
+        print("[AutoSeater] VSpawn fired successfully")
+    end
 end
 
 local function findSeat(vehicle)
