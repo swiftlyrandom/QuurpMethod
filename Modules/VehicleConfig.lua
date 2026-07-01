@@ -9,7 +9,7 @@ return {
 
     PLANE_CONFIG = {
         difficulty     = "Elite",
-        vehicleName    = "Bomber",
+        vehicleName    = "Large Bomber",
         fovRadius      = 2000,
         engineSpeed    = 8652.419607067108,
         engineThrottle = 1.2,
