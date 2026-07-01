@@ -22,6 +22,11 @@ local MainController = {}
 local heartbeatConnection = nil
 local networkPollConnection = nil
 
+local BOMB_MAX = 3            -- Large Bomber bomb count
+local BOMB_COOLDOWN = 2.0     -- seconds between drops
+local bombCount = BOMB_MAX
+local lastBombTime = 0
+
 local function boot()
     print("[Main] Waiting for team...")
     while not player.Team do task.wait(0.5) end
@@ -166,14 +171,27 @@ local function boot()
                  if rpgConfig and rpgConfig.enabled then
                      RPGWeapon.update(body)
                  end
-            
                  -- Forward guns: fire whenever the nose is on the locked enemy
-                 local lockedEnemy = CombatBrain.getLockedEnemy()
-                 if lockedEnemy then
-                     GunSystem.update(body, lockedEnemy)
-                 else
-                     GunSystem.stopFiring()
-                 end
+                    local lockedEnemy = CombatBrain.getLockedEnemy()
+                    if lockedEnemy then
+                        GunSystem.update(body, lockedEnemy)
+            
+                        -- Bomb drop: fire up to 3 times while orbiting an enemy
+                        local now = tick()
+                        if bombCount > 0 and (now - lastBombTime) >= BOMB_COOLDOWN then
+                            local event = ReplicatedStorage:FindFirstChild("Event")
+                            if event then
+                                event:FireServer("bomb")
+                                bombCount = bombCount - 1
+                                lastBombTime = now
+                                print("[Main] Bomb dropped! Remaining:", bombCount)
+                            end
+                        end
+                    else
+                        GunSystem.stopFiring()
+                        -- Reset bomb count when no enemy is locked
+                        bombCount = BOMB_MAX
+                    end
             end)
         end
 
