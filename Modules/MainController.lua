@@ -154,12 +154,15 @@ local function boot()
         end
 
         -- Apply corkscrew offset (reduced during chase for tighter aim)
+        -- Apply corkscrew offset (only for combat; disable otherwise)
         if target then
             local forwardDir = (target - body.Position).Unit
-            local nearPoint = body.Position + forwardDir * 250
+            local nearPoint = body.Position + forwardDir * 80   -- look-ahead
             local corkscrewOffset = MOVE.getCorkscrewOffset(forwardDir)
             if combatTarget then
-                corkscrewOffset = corkscrewOffset * 0.05   -- you can adjust this later
+                corkscrewOffset = corkscrewOffset * 0.05   -- tiny weave in combat
+            else
+                corkscrewOffset = Vector3.zero              -- no wobble during objective/cruise
             end
             target = nearPoint + corkscrewOffset
             MOVE.intercept(body, target, targetVel, dt)
