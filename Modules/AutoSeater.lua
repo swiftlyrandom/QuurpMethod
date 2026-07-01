@@ -22,7 +22,6 @@ end
 local function getSpawnPart()
     local teamName = player.Team and player.Team.Name or ""
     local dockName = teamName:lower():find("japan") and "JapanDock" or "USDock"
-    print("[AutoSeater] Looking for dock:", dockName)
 
     local dock = workspace:FindFirstChild(dockName)
     if not dock then
@@ -42,39 +41,31 @@ local function getSpawnPart()
         return nil
     end
 
-    print("[AutoSeater] Airport found:", airport:GetFullName())
     return airport
 end
 
 local function spawnVehicle()
     if tick() - lastSpawnTime < SPAWN_COOLDOWN then
-        print("[AutoSeater] Spawn cooldown active, skipping")
         return
     end
     if currentVehicle and currentVehicle.Parent then
-        print("[AutoSeater] Already have a vehicle, skipping spawn")
         return
     end
-
-    print("[AutoSeater] Attempting to spawn vehicle...")
 
     local spawnPart = getSpawnPart()
     if not spawnPart then
         warn("[AutoSeater] getSpawnPart() returned nil – check dock, VehicleSP, Airport")
         return
     end
-    print("[AutoSeater] Spawn part found:", spawnPart:GetFullName())
 
     local ev = ReplicatedStorage:FindFirstChild("Event")
     if not ev then
         warn("[AutoSeater] ReplicatedStorage.Event not found!")
         return
     end
-    print("[AutoSeater] RemoteEvent found")
 
     local vehicleName = PLANE_CONFIG.vehicleName or "Bomber"
     local vehiclePrice = PLANE_CONFIG.vehiclePrice or 2
-    print("[AutoSeater] Spawning:", vehicleName, "price:", vehiclePrice)
 
     lastSpawnTime = tick()
 
@@ -85,7 +76,6 @@ local function spawnVehicle()
     if not success then
         warn("[AutoSeater] FireServer error:", err)
     else
-        print("[AutoSeater] VSpawn fired successfully")
     end
 end
 
@@ -123,7 +113,6 @@ local function seatPlayer(vehicle)
             task.delay(RESPAWN_COOLDOWN, function() seatPlayer(vehicle) end)
         end
     end)
-    print("[AutoSeater] Seated in:", vehicle.Name)
 end
 
 local function findExistingVehicle()
@@ -135,7 +124,6 @@ end
 function startAutoSeater()
     local role = Config.PLANE_CONFIG.role or "pilot"
     if role == "gunner" then
-        print("[AutoSeater] Gunner role – skipping vehicle spawn/seating.")
         return
     end
     workspace.ChildAdded:Connect(function(child)
@@ -149,7 +137,6 @@ function startAutoSeater()
 
     workspace.ChildRemoved:Connect(function(child)
         if child == currentVehicle then
-            print("[AutoSeater] Vehicle lost")
             currentVehicle = nil
             task.delay(RESPAWN_COOLDOWN, spawnVehicle)
         end
