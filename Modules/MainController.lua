@@ -38,9 +38,10 @@ local function boot()
     if objectives["harbour_enemy"] then
         RPGWeapon.addStaticTarget(objectives["harbour_enemy"], 1)
     end
-    for _, obj in ipairs(objectives) do
-        if obj.pos then
-            RPGWeapon.addStaticTarget(obj.pos, 2)
+    -- add all islands (keys like "island_a", "island_b", ...)
+    for key, pos in pairs(objectives) do
+        if key:find("^island_") then
+            RPGWeapon.addStaticTarget(pos, 2)
         end
     end
 
@@ -63,9 +64,9 @@ local function boot()
             if objectives["harbour_enemy"] then
                 RPGWeapon.addStaticTarget(objectives["harbour_enemy"], 1)
             end
-            for _, obj in ipairs(objectives) do
-                if obj.pos then
-                    RPGWeapon.addStaticTarget(obj.pos, 2)
+            for key, pos in pairs(objectives) do
+                if key:find("^island_") then
+                    RPGWeapon.addStaticTarget(pos, 2)
                 end
             end
 
