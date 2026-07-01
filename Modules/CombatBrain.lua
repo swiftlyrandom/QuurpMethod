@@ -3,7 +3,7 @@ local Players = game:GetService("Players")
 local player = Players.LocalPlayer
 
 local CombatBrain = {}
-local LOCK_RANGE = 1200
+local LOCK_RANGE = 1400
 local MIN_ENEMY_SPEED = 100
 local ORBIT_RADIUS = 250
 local ORBIT_ALTITUDE_OFFSET = 800   -- studs above the enemy
