@@ -1,5 +1,5 @@
 -- ObjectiveResolver.lua
-local ORBIT_RADIUS = 250
+local ORBIT_RADIUS = 500
 local ORBIT_SPEED  = 0.25
 local SINE_AMP    = 50
 local SINE_PERIOD = 12
