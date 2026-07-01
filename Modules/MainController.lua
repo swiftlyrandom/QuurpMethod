@@ -156,7 +156,7 @@ local function boot()
         -- Apply corkscrew offset (reduced during chase for tighter aim)
         if target then
             local forwardDir = (target - body.Position).Unit
-            local nearPoint = body.Position + forwardDir * 80
+            local nearPoint = body.Position + forwardDir * 250
             local corkscrewOffset = MOVE.getCorkscrewOffset(forwardDir)
             if combatTarget then
                 corkscrewOffset = corkscrewOffset * 0.05   -- you can adjust this later
