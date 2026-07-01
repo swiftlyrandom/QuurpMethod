@@ -164,7 +164,15 @@ function MOVE.setParabolicTarget(startPos, targetPos, targetAlt)
     pathTargetPos = targetPos
     pathTargetAlt = targetAlt
     pathProgress = 0
-    pathPeakY = math.max(startPos.Y, targetAlt) * 2
+
+    -- If we're already above the target, don't climb any further.
+    -- Use the current altitude as the peak so we only descend.
+    if startPos.Y > targetAlt then
+        pathPeakY = startPos.Y
+    else
+        pathPeakY = math.max(startPos.Y, targetAlt) * 2
+    end
+
     print("[Arc] SET start:", startPos.Y, "target:", targetAlt, "peak:", pathPeakY)
 end
 
