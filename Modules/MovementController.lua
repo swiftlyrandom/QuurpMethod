@@ -127,10 +127,14 @@ end
 
 -- parabolic aim point: climbs from start to peak, then descends to target
 function MOVE.getParabolicAimPoint(bodyPos, dt)
-    if not pathStartPos or not pathTargetPos then return nil end
+    if not pathStartPos or not pathTargetPos then
+        -- print("[Arc] No active path")  -- uncomment if you want to see when it's idle
+        return nil
+    end
 
     pathProgress = pathProgress + (dt / pathTotalTime)
     if pathProgress >= 1.0 then
+        print("[Arc] COMPLETE – clearing path")
         pathProgress = 1.0
         pathStartPos = nil
         pathTargetPos = nil
@@ -139,7 +143,6 @@ function MOVE.getParabolicAimPoint(bodyPos, dt)
     end
 
     local t = pathProgress
-
     local linePoint = Vector3.new(
         pathStartPos.X + (pathTargetPos.X - pathStartPos.X) * t,
         0,
@@ -149,19 +152,20 @@ function MOVE.getParabolicAimPoint(bodyPos, dt)
     local startY = pathStartPos.Y
     local peakY = pathPeakY
     local endY = pathTargetAlt
-
     local parabolicY = (1-t)*(1-t)*startY + 2*(1-t)*t*peakY + t*t*endY
+
+    print(string.format("[Arc] t=%.2f startY=%.0f peakY=%.0f endY=%.0f currentY=%.0f",
+        t, startY, peakY, endY, parabolicY))
 
     return Vector3.new(linePoint.X, parabolicY, linePoint.Z)
 end
-
 function MOVE.setParabolicTarget(startPos, targetPos, targetAlt)
     pathStartPos = startPos
     pathTargetPos = targetPos
     pathTargetAlt = targetAlt
     pathProgress = 0
-    -- Lock the peak at double the higher of start or target altitude
     pathPeakY = math.max(startPos.Y, targetAlt) * 2
+    print("[Arc] SET start:", startPos.Y, "target:", targetAlt, "peak:", pathPeakY)
 end
 
 return MOVE
