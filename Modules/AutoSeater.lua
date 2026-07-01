@@ -38,7 +38,8 @@ local function spawnVehicle()
     local ev = ReplicatedStorage:FindFirstChild("Event")
     if not ev then return end
     pcall(function()
-        ev:FireServer("VSpawn", { spawnPart, PLANE_CONFIG.vehicleName, 2 })
+        local price = PLANE_CONFIG.vehiclePrice or 2   -- fallback to 2 if not set
+        ev:FireServer("VSpawn", { spawnPart, PLANE_CONFIG.vehicleName, price })
     end)
     print("[AutoSeater] Spawn requested:", PLANE_CONFIG.vehicleName)
 end
