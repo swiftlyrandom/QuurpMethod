@@ -127,6 +127,7 @@ local function boot()
             if not target then
                 local objTarget = ObjResolver.getTarget(body, dt)
                 if objTarget then
+                    print("[Main] Starting parabolic arc to objective at altitude", ObjResolver.currentAlt)
                     MOVE.setParabolicTarget(body.Position, objTarget, ObjResolver.currentAlt)
                     target = MOVE.getParabolicAimPoint(body.Position, dt)
                 end
