@@ -134,7 +134,6 @@ function MOVE.getParabolicAimPoint(bodyPos, dt)
 
     pathProgress = pathProgress + (dt / pathTotalTime)
     if pathProgress >= 1.0 then
-        print("[Arc] COMPLETE – clearing path")
         pathProgress = 1.0
         pathStartPos = nil
         pathTargetPos = nil
@@ -154,9 +153,6 @@ function MOVE.getParabolicAimPoint(bodyPos, dt)
     local endY = pathTargetAlt
     local parabolicY = (1-t)*(1-t)*startY + 2*(1-t)*t*peakY + t*t*endY
 
-    print(string.format("[Arc] t=%.2f startY=%.0f peakY=%.0f endY=%.0f currentY=%.0f",
-        t, startY, peakY, endY, parabolicY))
-
     return Vector3.new(linePoint.X, parabolicY, linePoint.Z)
 end
 function MOVE.setParabolicTarget(startPos, targetPos, targetAlt)
@@ -172,8 +168,6 @@ function MOVE.setParabolicTarget(startPos, targetPos, targetAlt)
     else
         pathPeakY = math.max(startPos.Y, targetAlt) * 2
     end
-
-    print("[Arc] SET start:", startPos.Y, "target:", targetAlt, "peak:", pathPeakY)
 end
 
 return MOVE
