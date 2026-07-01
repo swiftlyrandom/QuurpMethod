@@ -34,8 +34,14 @@ local function boot()
     local objectives = WorldScanner.scan(myTeamName)
     ObjResolver.setObjectives(objectives)
 
+    RPGWeapon.clearStaticTargets()
     if objectives["harbour_enemy"] then
         RPGWeapon.addStaticTarget(objectives["harbour_enemy"], 1)
+    end
+    for _, obj in ipairs(objectives) do
+        if obj.pos then
+            RPGWeapon.addStaticTarget(obj.pos, 2)
+        end
     end
 
     -- Re‑scan on map reload
@@ -51,10 +57,18 @@ local function boot()
             ObjResolver.setObjectives(objectives)
             ObjResolver.currentTarget = nil
             ObjResolver.currentObjLabel = nil
+
+            -- Refresh RPG targets
             RPGWeapon.clearStaticTargets()
             if objectives["harbour_enemy"] then
                 RPGWeapon.addStaticTarget(objectives["harbour_enemy"], 1)
             end
+            for _, obj in ipairs(objectives) do
+                if obj.pos then
+                    RPGWeapon.addStaticTarget(obj.pos, 2)
+                end
+            end
+
             isRescanning = false
         end)
     end)
