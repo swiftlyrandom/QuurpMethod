@@ -1,27 +1,17 @@
--- CombatBrain.lua – smoothed chase-and-break with timed phases
+-- CombatBrain.lua – simple high‑orbit for pilot AI (defense by backgunner)
 local Players = game:GetService("Players")
 local player = Players.LocalPlayer
 
 local CombatBrain = {}
 local LOCK_RANGE = 1200
 local MIN_ENEMY_SPEED = 100
+local ORBIT_RADIUS = 250
+local ORBIT_ALTITUDE_OFFSET = 1750   -- studs above the enemy
+local ORBIT_SPEED = 0.4             -- rad/s
 
 local currentTargetEnemy = nil
 local hasLock = false
-local combatMode = "chase"
-local breakDirection = 1
-
--- Timers for chase / break phases (seconds)
-local CHASE_DURATION = 5.0
-local BREAK_DURATION = 2.0
-local phaseTimer = 0
-
--- Velocity smoothing (exponential moving average)
-local smoothedVelocity = Vector3.zero
-local VEL_SMOOTH_FACTOR = 0.3   -- lower = smoother but more lag
-
--- Distance thresholds only used to switch break side or force break if too close
-local MIN_DIST = 150   -- if closer than this, force break immediately
+local orbitAngle = 0
 
 local function findClosestEnemy(bodyPos)
     local closest, closestDist = nil, LOCK_RANGE
@@ -49,66 +39,29 @@ function CombatBrain.update(body, dt)
     if not enemyHRP then
         currentTargetEnemy = nil
         hasLock = false
-        combatMode = "chase"
-        phaseTimer = 0
-        smoothedVelocity = Vector3.zero
         return nil, nil
     end
 
-    -- Lock acquisition
+    -- Lock onto new enemy
     if enemyHRP ~= currentTargetEnemy then
         currentTargetEnemy = enemyHRP
         hasLock = true
-        combatMode = "chase"
-        phaseTimer = 0
-        breakDirection = math.random(0, 1) == 0 and -1 or 1
-        smoothedVelocity = enemyHRP.AssemblyLinearVelocity   -- initialise with current
+        -- Start orbit from a random angle so multiple bombers spread out
+        orbitAngle = math.random() * math.pi * 2
     end
 
-    -- Smooth the enemy velocity
-    local rawVel = enemyHRP.AssemblyLinearVelocity
-    smoothedVelocity = smoothedVelocity:Lerp(rawVel, VEL_SMOOTH_FACTOR)
+    -- Advance orbit
+    orbitAngle = orbitAngle + ORBIT_SPEED * dt
 
     local enemyPos = enemyHRP.Position
-    local dist = (enemyPos - body.Position).Magnitude
+    local orbitY = enemyPos.Y + ORBIT_ALTITUDE_OFFSET   -- stay safely above
 
-    -- Phase timer
-    phaseTimer = phaseTimer + dt
+    local ox = math.cos(orbitAngle) * ORBIT_RADIUS
+    local oz = math.sin(orbitAngle) * ORBIT_RADIUS
+    local targetPos = Vector3.new(enemyPos.X + ox, orbitY, enemyPos.Z + oz)
 
-    -- Force break if too close
-    if combatMode == "chase" and dist < MIN_DIST then
-        combatMode = "break"
-        phaseTimer = 0
-        breakDirection = math.random(0, 1) == 0 and -1 or 1
-    end
-
-    -- Timed phase transitions
-    if combatMode == "chase" and phaseTimer >= CHASE_DURATION then
-        combatMode = "break"
-        phaseTimer = 0
-        breakDirection = math.random(0, 1) == 0 and -1 or 1
-    elseif combatMode == "break" and phaseTimer >= BREAK_DURATION then
-        combatMode = "chase"
-        phaseTimer = 0
-    end
-
-    -- Compute target
-    local targetY = body.Position.Y
-
-    if combatMode == "chase" then
-        -- Use enemy position with smoothed velocity for lead
-        return Vector3.new(enemyPos.X, targetY, enemyPos.Z), smoothedVelocity
-
-    else  -- "break"
-        local awayFromEnemy = (body.Position - enemyPos).Unit
-        if awayFromEnemy.Magnitude < 0.1 then
-            awayFromEnemy = Vector3.new(1, 0, 0)
-        end
-        local lateral = Vector3.new(-awayFromEnemy.Z, 0, awayFromEnemy.X).Unit * (150 * breakDirection)
-        local climb = Vector3.new(0, 150, 0)
-        local breakTarget = body.Position + awayFromEnemy * 200 + lateral + climb
-        return breakTarget, nil
-    end
+    -- No velocity needed for a static orbit point
+    return targetPos, nil
 end
 
 function CombatBrain.getLockedEnemy()
