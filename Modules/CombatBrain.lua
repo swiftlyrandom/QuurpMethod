@@ -7,7 +7,7 @@ local LOCK_RANGE = 1200
 local MIN_ENEMY_SPEED = 100
 local ORBIT_RADIUS = 250
 local ORBIT_ALTITUDE_OFFSET = 800   -- studs above the enemy
-local ORBIT_SPEED = 0.4             -- rad/s
+local ORBIT_SPEED = 0.15           -- rad/s
 
 local currentTargetEnemy = nil
 local hasLock = false
