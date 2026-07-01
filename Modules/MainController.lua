@@ -26,6 +26,8 @@ local BOMB_MAX = 3            -- Large Bomber bomb count
 local BOMB_COOLDOWN = 2.0     -- seconds between drops
 local bombCount = BOMB_MAX
 local lastBombTime = 0
+local stateNeedArc = false
+local arcObjectivePos = nil   -- the static objective position for the arc
 
 local function boot()
     print("[Main] Waiting for team...")
@@ -110,6 +112,11 @@ local function boot()
                 ObjResolver.currentAlt = altitude
                 if mode == "objective" and objLabel then
                     ObjResolver.resolveObjective(objLabel, altitude)
+                    -- Start a new approach arc to the static objective position
+                    stateNeedArc = true
+                    arcObjectivePos = ObjResolver.currentTarget
+                else
+                    stateNeedArc = false   -- cruise/climb/dive don't need an arc
                 end
             end)
         end
@@ -137,37 +144,47 @@ local function boot()
         -- Decide what to fly toward
         local target, targetVel
         local combatTarget, combatVel = CombatBrain.update(body, dt)
+
         if combatTarget then
             target = combatTarget
             targetVel = combatVel or Vector3.zero
+            stateNeedArc = false   -- combat overrides any arc
         else
-            -- Only use parabolic arc if NOT in combat
-            target = MOVE.getParabolicAimPoint(body.Position, dt)
-            targetVel = Vector3.zero
-            if not target then
-                local objTarget = ObjResolver.getTarget(body, dt)
-                if objTarget then
-                    MOVE.setParabolicTarget(body.Position, objTarget, ObjResolver.currentAlt)
-                    target = MOVE.getParabolicAimPoint(body.Position, dt)
+            if stateNeedArc then
+                -- Parabolic approach to the static objective position
+                target = MOVE.getParabolicAimPoint(body.Position, dt)
+                targetVel = Vector3.zero
+                if not target then
+                    -- Arc finished, switch to orbit
+                    stateNeedArc = false
+                else
+                    -- Still climbing/descending; use the arc point directly (no orbit offset)
+                    -- We'll skip the orbit target below
+                end
+            end
+
+            if not stateNeedArc and not target then
+                -- Normal orbit or cruise
+                target = ObjResolver.getTarget(body, dt)
+                targetVel = Vector3.zero
+                if not target then
+                    MOVE.cruise(body)
                 end
             end
         end
 
-        -- Apply corkscrew offset (reduced during chase for tighter aim)
-        -- Apply corkscrew offset (only for combat; disable otherwise)
+        -- Apply corkscrew offset (only for combat; disabled for objective/cruise)
         if target then
             local forwardDir = (target - body.Position).Unit
-            local nearPoint = body.Position + forwardDir * 80   -- look-ahead
+            local nearPoint = body.Position + forwardDir * 200   -- smoother orbit
             local corkscrewOffset = MOVE.getCorkscrewOffset(forwardDir)
             if combatTarget then
-                corkscrewOffset = corkscrewOffset * 0.05   -- tiny weave in combat
+                corkscrewOffset = corkscrewOffset * 0.05
             else
-                corkscrewOffset = Vector3.zero              -- no wobble during objective/cruise
+                corkscrewOffset = Vector3.zero   -- no wobble outside combat
             end
             target = nearPoint + corkscrewOffset
             MOVE.intercept(body, target, targetVel, dt)
-        else
-            MOVE.cruise(body)
         end
                  local rpgConfig = Config.RPG_CONFIG
                  if rpgConfig and rpgConfig.enabled then
