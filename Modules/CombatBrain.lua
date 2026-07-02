@@ -1,23 +1,24 @@
--- CombatBrain.lua – two‑phase climb + high‑orbit
+-- CombatBrain.lua – retreat → weave approach → high‑orbit
 local Players = game:GetService("Players")
 local player = Players.LocalPlayer
 
 local CombatBrain = {}
-local LOCK_RANGE = 1200
+local LOCK_RANGE = 1800
 local MIN_ENEMY_SPEED = 100
 local ORBIT_RADIUS = 250
 local ORBIT_ALTITUDE_OFFSET = 800   -- studs above the enemy
 local ORBIT_SPEED = 0.15            -- rad/s
 
--- Retreat (climb) weaving
+-- Weave settings (used by retreat and approach)
 local WEAVE_AMPLITUDE = 80          -- studs left/right
 local WEAVE_INTERVAL  = 1.5         -- seconds between direction flips
-local RETREAT_ALTITUDE_FRACTION = 0.90   -- reach 75% of target height before orbiting
+local RETREAT_ALTITUDE_FRACTION = 0.5   -- reach N% of target height before approach
+local APPROACH_DISTANCE = 150       -- studs from orbit center to start smooth orbit
 
 local currentTargetEnemy = nil
 local hasLock = false
 local orbitAngle = 0
-local phase = "retreat"             -- "retreat" or "orbit"
+local phase = "retreat"             -- "retreat" → "approach" → "orbit"
 local weaveTimer = 0
 local weaveDir = 1                  -- 1 or -1
 
@@ -66,45 +67,60 @@ function CombatBrain.update(body, dt)
     local targetOrbitY = enemyPos.Y + ORBIT_ALTITUDE_OFFSET
     local heightFraction = (myPos.Y - enemyPos.Y) / ORBIT_ALTITUDE_OFFSET   -- 0 to 1
 
-    -- Phase transition: switch to orbit when we reach 75% of target height
+    -- Phase transitions
     if phase == "retreat" and heightFraction >= RETREAT_ALTITUDE_FRACTION then
-        phase = "orbit"
-        orbitAngle = math.random() * math.pi * 2   -- random start angle for orbit
+        phase = "approach"
+        weaveTimer = 0
+        weaveDir = (math.random(0, 1) == 0) and -1 or 1
+    elseif phase == "approach" then
+        local orbitCenter = Vector3.new(enemyPos.X, targetOrbitY, enemyPos.Z)
+        local distToCenter = (myPos - orbitCenter).Magnitude
+        if distToCenter < APPROACH_DISTANCE then
+            phase = "orbit"
+            orbitAngle = math.random() * math.pi * 2
+        end
     end
 
-    if phase == "retreat" then
-        -- Retreat: fly away from enemy while climbing, with lateral weave
+    -- Weave timer (shared by retreat and approach)
+    if phase == "retreat" or phase == "approach" then
         weaveTimer = weaveTimer + dt
         if weaveTimer >= WEAVE_INTERVAL then
             weaveTimer = 0
             weaveDir = (math.random(0, 1) == 0) and -1 or 1
         end
+    end
 
-        -- Base direction: directly away from the enemy
+    if phase == "retreat" then
+        -- Retreat: fly away from enemy while climbing, with lateral weave
         local awayDir = (myPos - enemyPos).Unit
         if awayDir.Magnitude < 0.1 then
-            awayDir = body.CFrame.LookVector   -- fallback
+            awayDir = body.CFrame.LookVector
         end
 
-        -- Perpendicular horizontal direction for weave
         local right = Vector3.new(-awayDir.Z, 0, awayDir.X).Unit
-
-        -- Retreat point: behind us + climb + lateral weave
         local retreatTarget = myPos
-                            + awayDir * 200                      -- move away
-                            + Vector3.new(0, 150, 0)             -- climb
-                            + right * weaveDir * WEAVE_AMPLITUDE -- weave
-
+                            + awayDir * 200
+                            + Vector3.new(0, 150, 0)
+                            + right * weaveDir * WEAVE_AMPLITUDE
         return retreatTarget, nil
 
-    else  -- "orbit"
-        -- Orbit above the enemy
-        orbitAngle = orbitAngle + ORBIT_SPEED * dt
+    elseif phase == "approach" then
+        -- Approach: fly toward the orbit center while climbing, with lateral weave
+        local orbitCenter = Vector3.new(enemyPos.X, targetOrbitY, enemyPos.Z)
+        local toCenter = (orbitCenter - myPos).Unit
+        if toCenter.Magnitude < 0.1 then
+            toCenter = body.CFrame.LookVector
+        end
 
+        local right = Vector3.new(-toCenter.Z, 0, toCenter.X).Unit
+        local approachTarget = orbitCenter + right * weaveDir * WEAVE_AMPLITUDE
+        return approachTarget, nil
+
+    else  -- "orbit"
+        orbitAngle = orbitAngle + ORBIT_SPEED * dt
         local ox = math.cos(orbitAngle) * ORBIT_RADIUS
         local oz = math.sin(orbitAngle) * ORBIT_RADIUS
         local targetPos = Vector3.new(enemyPos.X + ox, targetOrbitY, enemyPos.Z + oz)
-
         return targetPos, nil
     end
 end
