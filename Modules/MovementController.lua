@@ -166,7 +166,7 @@ function MOVE.setParabolicTarget(startPos, targetPos, targetAlt)
     if startPos.Y > targetAlt then
         pathPeakY = startPos.Y
     else
-        pathPeakY = math.max(startPos.Y, targetAlt) * 2
+        pathPeakY = math.max(startPos.Y, targetAlt) * 3
     end
 end
 
