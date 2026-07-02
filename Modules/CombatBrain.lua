@@ -12,7 +12,7 @@ local ORBIT_SPEED = 0.15            -- rad/s
 -- Retreat (climb) weaving
 local WEAVE_AMPLITUDE = 80          -- studs left/right
 local WEAVE_INTERVAL  = 1.5         -- seconds between direction flips
-local RETREAT_ALTITUDE_FRACTION = 0.75   -- reach 75% of target height before orbiting
+local RETREAT_ALTITUDE_FRACTION = 0.90   -- reach 75% of target height before orbiting
 
 local currentTargetEnemy = nil
 local hasLock = false
