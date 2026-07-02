@@ -10,7 +10,7 @@ local ORBIT_ALTITUDE_OFFSET = 800   -- studs above the enemy
 local ORBIT_SPEED         = 0.15    -- rad/s
 
 -- Weave settings (retreat & approach)
-local WEAVE_AMPLITUDE     = 80
+local WEAVE_AMPLITUDE     = 250   -- or even 300
 local WEAVE_INTERVAL      = 1.5     -- seconds between direction flips
 local RETREAT_ALTITUDE_FRACTION = 0.5   -- switch to approach at 50 % of target height
 local APPROACH_DISTANCE   = 150     -- distance from orbit centre to start smooth orbit
