@@ -1,0 +1,204 @@
+-- Universal Homing Projectile System
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local Workspace = game:GetService("Workspace")
+local LocalPlayer = Players.LocalPlayer
+
+-- ===== SETTINGS =====
+local ACTIVATION_DELAY = 0.3
+local MAX_PROJECTILES = 15
+local CLEANUP_INTERVAL = 2  -- Seconds between full cleanup scans
+
+-- Speed config per projectile type
+local SPEED_CONFIG = {
+    Bomb = { max = 2000, min = 100, slowRadius = 40, stopRadius = 4, damping = 6 },
+    Missile = { max = 2500, min = 150, slowRadius = 50, stopRadius = 6, damping = 4 },
+    Torpedo = { max = 1500, min = 80, slowRadius = 35, stopRadius = 5, damping = 8 },
+    -- Default for unknown types
+    Default = { max = 2000, min = 100, slowRadius = 40, stopRadius = 4, damping = 6 },
+}
+
+-- Projectile names to track
+local PROJECTILE_NAMES = {
+    "Bomb", "Missile", "Torpedo",
+}
+-- ======================
+
+local activeProjectiles = {}
+local projectileAge = {}
+local lastCleanup = 0
+
+local function clamp(x, a, b)
+    return math.max(a, math.min(b, x))
+end
+
+-- Check if projectile is dropped/fired (not attached to any vehicle)
+local function isFiredProjectile(part)
+    local parent = part.Parent
+    if parent == Workspace then return true end
+    
+    if parent:IsA("Model") and parent.Parent == Workspace then
+        local name = parent.Name
+        -- Reject if it's a vehicle
+        local vehicles = {
+            "Bomber", "Large Bomber", "Torpedo Bomber",
+            "Destroyer", "Cruiser", "Heavy Cruiser",
+            "Battleship", "Carrier", "Submarine",
+            "Plane", "Ship", "Boat", "Tank", "Jet",
+        }
+        for _, v in ipairs(vehicles) do
+            if name == v then return false end
+        end
+        return true
+    end
+    
+    return false
+end
+
+-- Get speed config for projectile type
+local function getSpeedConfig(name)
+    return SPEED_CONFIG[name] or SPEED_CONFIG.Default
+end
+
+-- Find closest enemy
+local function getClosestEnemy(pos)
+    local best, bestDist = nil, math.huge
+    for _, pl in ipairs(Players:GetPlayers()) do
+        if pl ~= LocalPlayer 
+            and pl.Team ~= LocalPlayer.Team 
+            and pl.Character 
+            and pl.Character:FindFirstChild("HumanoidRootPart") 
+            and pl.Character:FindFirstChild("InGame", true) then
+            
+            local hrp = pl.Character.HumanoidRootPart
+            local d = (hrp.Position - pos).Magnitude
+            if d < bestDist then
+                bestDist = d
+                best = hrp
+            end
+        end
+    end
+    return best, bestDist
+end
+
+-- Clean up destroyed projectiles
+local function cleanup()
+    local now = tick()
+    if now - lastCleanup < CLEANUP_INTERVAL then return end
+    lastCleanup = now
+    
+    for proj, _ in pairs(activeProjectiles) do
+        if not proj.Parent then
+            activeProjectiles[proj] = nil
+            projectileAge[proj] = nil
+        end
+    end
+end
+
+-- Apply homing to a single projectile
+local function applyHoming(proj, dt)
+    local name = proj.Name
+    local config = getSpeedConfig(name)
+    
+    -- Create attachment
+    local attachment = proj:FindFirstChild("HomingAttachment")
+    if not attachment then
+        attachment = Instance.new("Attachment")
+        attachment.Name = "HomingAttachment"
+        attachment.Parent = proj
+    end
+    
+    -- Anti-gravity
+    local antiGravity = proj:FindFirstChild("AntiGravity")
+    if not antiGravity then
+        antiGravity = Instance.new("VectorForce")
+        antiGravity.Name = "AntiGravity"
+        antiGravity.Attachment0 = attachment
+        antiGravity.RelativeTo = Enum.ActuatorRelativeTo.World
+        antiGravity.Parent = proj
+    end
+    antiGravity.Force = Vector3.new(0, Workspace.Gravity * proj.AssemblyMass, 0)
+    
+    -- Homing force
+    local homing = proj:FindFirstChild("HomingForce")
+    if not homing then
+        homing = Instance.new("VectorForce")
+        homing.Name = "HomingForce"
+        homing.Attachment0 = attachment
+        homing.RelativeTo = Enum.ActuatorRelativeTo.World
+        homing.Parent = proj
+    end
+    
+    -- Find target
+    local target, dist = getClosestEnemy(proj.Position)
+    if target and dist then
+        if dist <= config.stopRadius then
+            homing.Force = Vector3.zero
+        else
+            local t = clamp((dist - config.stopRadius) / math.max((config.slowRadius - config.stopRadius), 0.0001), 0, 1)
+            local speed = config.min + (config.max - config.min) * t
+            
+            local dir = (target.Position - proj.Position)
+            if dir.Magnitude > 0.001 then
+                dir = dir.Unit
+            else
+                dir = Vector3.zero
+            end
+            
+            local desiredVel = dir * speed
+            local currentVel = proj.AssemblyLinearVelocity
+            local steer = (desiredVel - currentVel) * proj.AssemblyMass / math.max(dt, 0.0001)
+            
+            if dist <= config.slowRadius then
+                local brake = -currentVel * config.damping * proj.AssemblyMass
+                steer = steer + brake
+            end
+            
+            homing.Force = steer
+        end
+    else
+        homing.Force = Vector3.zero
+    end
+end
+
+-- Check if projectile name is valid
+local function isValidProjectile(name)
+    for _, n in ipairs(PROJECTILE_NAMES) do
+        if name == n then return true end
+    end
+    return false
+end
+
+-- Main loop
+RunService.Heartbeat:Connect(function(dt)
+    if not dt or dt <= 0 then return end
+    
+    cleanup()
+    local now = tick()
+    local count = 0
+    
+    for _, proj in ipairs(Workspace:GetDescendants()) do
+        if count >= MAX_PROJECTILES then break end
+        if not proj:IsA("BasePart") then continue end
+        if not isValidProjectile(proj.Name) then continue end
+        if not isFiredProjectile(proj) then continue end
+        
+        -- Track age
+        if not projectileAge[proj] then
+            projectileAge[proj] = now
+        end
+        
+        -- Activation delay
+        if now - projectileAge[proj] < ACTIVATION_DELAY then
+            continue
+        end
+        
+        count = count + 1
+        activeProjectiles[proj] = true
+        applyHoming(proj, dt)
+    end
+end)
+
+print("🎯 Universal Homing System loaded")
+print("  Tracking:", table.concat(PROJECTILE_NAMES, ", "))
+print("  Max:", MAX_PROJECTILES, "projectiles")
