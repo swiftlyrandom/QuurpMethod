@@ -1,4 +1,4 @@
--- MainController.lua
+-- MainController.lua | 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local player = Players.LocalPlayer
