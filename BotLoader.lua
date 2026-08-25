@@ -22,6 +22,7 @@ local MODULE_NAMES = {
     "CombatBrain",
     "GunSystem",
     "MainController",
+    "ExampleRLPolicy",
 }
 
 -- ---------- LOADER ----------
