@@ -1,1 +1,30 @@
-Nothing needs to be added to the .gitignore file since the changes only include Lua source files (.lua) which are legitimate code files that should be tracked in version control. No build artifacts, dependencies, temporary files, or other ignorable items were detected in the file changes.
+```
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.venv/
+.ENV
+.venv.bak/
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Dependencies
+requirements.txt.bak
+
+# Logs
+*.log
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+```
