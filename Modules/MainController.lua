@@ -1,4 +1,4 @@
--- MainController.lua 2
+-- MainController.lua
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local player = Players.LocalPlayer
@@ -313,7 +313,8 @@ local function boot()
                 bombCount = BOMB_MAX
             end
         end
-    end)
+    end) -- <-- This closes the RunService.Heartbeat:Connect(function(dt)
+end -- <-- THIS WAS THE MISSING END! Closes the boot() function
 
 -- PUBLIC API
 function MainController.start()
