@@ -22,12 +22,101 @@ local MainController = {}
 local heartbeatConnection = nil
 local networkPollConnection = nil
 
-local BOMB_MAX = 3            -- Large Bomber bomb count
-local BOMB_COOLDOWN = 2.0     -- seconds between drops
-local bombCount = BOMB_MAX
+-- RL Control State
+local rlMode = false  -- Toggle between heuristic and RL control
+local rlPolicy = nil  -- Will be set when RL policy is loaded
+
+-- RL Action Space
+-- pitch: -1 to 1, yaw: -1 to 1, throttle: 0 or 1, fireGuns: 0 or 1, dropBomb: 0 or 1
 local lastBombTime = 0
+local BOMB_COOLDOWN = 2.0
+local BOMB_MAX = 3
+local bombCount = BOMB_MAX
+
+-- Heuristic state (preserved for backward compatibility)
 local stateNeedArc = false
 local arcObjectivePos = nil   -- the static objective position for the arc
+
+-- PUBLIC API for RL integration
+function MainController.setRLMode(enabled)
+    rlMode = enabled
+    print("[Main] RL Mode:", enabled and "ENABLED" or "DISABLED")
+end
+
+function MainController.isRLMode()
+    return rlMode
+end
+
+-- Set RL policy module (called externally when RL model is loaded)
+function MainController.setRLPolicy(policyModule)
+    rlPolicy = policyModule
+end
+
+-- Get observation data for RL agent (uses WorldScanner)
+function MainController.getObservation(vehicle, enemy)
+    local body = vehicle.PrimaryPart or vehicle:FindFirstChild("MainBody") or vehicle:FindFirstChildWhichIsA("BasePart")
+    if not body then return nil end
+    
+    local hp = vehicle:FindFirstChild("HP")
+    
+    return {
+        position = body.Position,
+        velocity = body.AssemblyLinearVelocity or Vector3.zero,
+        orientation = body.CFrame,
+        altitude = body.Position.Y,
+        
+        -- Enemy info
+        enemyLocked = enemy ~= nil,
+        enemyRelativePos = enemy and (enemy.Position - body.Position) or nil,
+        enemyVelocity = enemy and enemy.AssemblyLinearVelocity or Vector3.zero,
+        
+        -- State
+        health = hp and hp.Value or 0,
+        bombCount = bombCount,
+        mode = ObjResolver.mode,
+    }
+end
+
+-- Execute RL action
+function MainController.executeRLAction(action, vehicle, enemy, dt)
+    if not action then return end
+    
+    local body = vehicle.PrimaryPart or vehicle:FindFirstChild("MainBody") or vehicle:FindFirstChildWhichIsA("BasePart")
+    if not body then return end
+    
+    -- Apply direct control
+    local pitch = math.clamp(action.pitch or 0, -1, 1)
+    local yaw = math.clamp(action.yaw or 0, -1, 1)
+    local throttle = (action.throttle or 0) > 0.5 and 1 or 0
+    
+    MOVE.setDirectControl(body, pitch, yaw, throttle)
+    
+    -- Handle weapons
+    local now = tick()
+    
+    -- Fire guns
+    if action.fireGuns and action.fireGuns > 0.5 and enemy then
+        GunSystem.update(body, enemy)
+    else
+        GunSystem.stopFiring()
+    end
+    
+    -- Drop bomb
+    if action.dropBomb and action.dropBomb > 0.5 and bombCount > 0 and (now - lastBombTime) >= BOMB_COOLDOWN then
+        local event = ReplicatedStorage:FindFirstChild("Event")
+        if event then
+            event:FireServer("bomb")
+            bombCount = bombCount - 1
+            lastBombTime = now
+            print("[Main] Bomb dropped! Remaining:", bombCount)
+        end
+    end
+    
+    -- Reset bombs when no enemy
+    if not enemy then
+        bombCount = BOMB_MAX
+    end
+end
 
 local function boot()
     print("[Main] Waiting for team...")
@@ -141,78 +230,90 @@ local function boot()
 
         MOVE.tickCorkscrew(dt)
 
-        -- Decide what to fly toward
-        local target, targetVel
-        local combatTarget, combatVel = CombatBrain.update(body, dt)
-
-        if combatTarget then
-            target = combatTarget
-            targetVel = combatVel or Vector3.zero
-            stateNeedArc = false   -- combat overrides any arc
+        -- Get enemy from WorldScanner/CombatBrain
+        local lockedEnemy = CombatBrain.getLockedEnemy()
+        
+        -- RL MODE vs HEURISTIC MODE
+        if rlMode and rlPolicy then
+            -- RL Control
+            local observation = MainController.getObservation(vehicle, lockedEnemy)
+            local action = rlPolicy.selectAction(observation, dt)
+            MainController.executeRLAction(action, vehicle, lockedEnemy, dt)
         else
-            if stateNeedArc then
-                -- Parabolic approach to the static objective position
-                target = MOVE.getParabolicAimPoint(body.Position, dt)
-                targetVel = Vector3.zero
-                if not target then
-                    -- Arc finished, switch to orbit
-                    stateNeedArc = false
-                else
-                    -- Still climbing/descending; use the arc point directly (no orbit offset)
-                    -- We'll skip the orbit target below
-                end
-            end
+            -- Heuristic Control (existing logic)
+            local target, targetVel
+            local combatTarget, combatVel = CombatBrain.update(body, dt)
 
-            if not stateNeedArc and not target then
-                -- Normal orbit or cruise
-                target = ObjResolver.getTarget(body, dt)
-                targetVel = Vector3.zero
-                if not target then
-                    MOVE.cruise(body)
-                end
-            end
-        end
-
-        -- Apply corkscrew offset (only for combat; disabled for objective/cruise)
-        if target then
-            local forwardDir = (target - body.Position).Unit
-            local nearPoint = body.Position + forwardDir * 200   -- smoother orbit
-            local corkscrewOffset = MOVE.getCorkscrewOffset(forwardDir)
             if combatTarget then
-                corkscrewOffset = corkscrewOffset * 0.05
+                target = combatTarget
+                targetVel = combatVel or Vector3.zero
+                stateNeedArc = false   -- combat overrides any arc
             else
-                corkscrewOffset = Vector3.zero   -- no wobble outside combat
-            end
-            target = nearPoint + corkscrewOffset
-            MOVE.intercept(body, target, targetVel, dt)
-        end
-                 local rpgConfig = Config.RPG_CONFIG
-                 if rpgConfig and rpgConfig.enabled then
-                     RPGWeapon.update(body)
-                 end
-                 -- Forward guns: fire whenever the nose is on the locked enemy
-                    local lockedEnemy = CombatBrain.getLockedEnemy()
-                    if lockedEnemy then
-                        GunSystem.update(body, lockedEnemy)
-            
-                        -- Bomb drop: fire up to 3 times while orbiting an enemy
-                        local now = tick()
-                        if bombCount > 0 and (now - lastBombTime) >= BOMB_COOLDOWN then
-                            local event = ReplicatedStorage:FindFirstChild("Event")
-                            if event then
-                                event:FireServer("bomb")
-                                bombCount = bombCount - 1
-                                lastBombTime = now
-                                print("[Main] Bomb dropped! Remaining:", bombCount)
-                            end
-                        end
+                if stateNeedArc then
+                    -- Parabolic approach to the static objective position
+                    target = MOVE.getParabolicAimPoint(body.Position, dt)
+                    targetVel = Vector3.zero
+                    if not target then
+                        -- Arc finished, switch to orbit
+                        stateNeedArc = false
                     else
-                        GunSystem.stopFiring()
-                        -- Reset bomb count when no enemy is locked
-                        bombCount = BOMB_MAX
+                        -- Still climbing/descending; use the arc point directly (no orbit offset)
+                        -- We'll skip the orbit target below
                     end
-            end)
+                end
+
+                if not stateNeedArc and not target then
+                    -- Normal orbit or cruise
+                    target = ObjResolver.getTarget(body, dt)
+                    targetVel = Vector3.zero
+                    if not target then
+                        MOVE.cruise(body)
+                    end
+                end
+            end
+
+            -- Apply corkscrew offset (only for combat; disabled for objective/cruise)
+            if target then
+                local forwardDir = (target - body.Position).Unit
+                local nearPoint = body.Position + forwardDir * 200   -- smoother orbit
+                local corkscrewOffset = MOVE.getCorkscrewOffset(forwardDir)
+                if combatTarget then
+                    corkscrewOffset = corkscrewOffset * 0.05
+                else
+                    corkscrewOffset = Vector3.zero   -- no wobble outside combat
+                end
+                target = nearPoint + corkscrewOffset
+                MOVE.intercept(body, target, targetVel, dt)
+            end
+            
+            -- Weapon control (heuristic)
+            local rpgConfig = Config.RPG_CONFIG
+            if rpgConfig and rpgConfig.enabled then
+                RPGWeapon.update(body)
+            end
+            
+            -- Forward guns: fire whenever the nose is on the locked enemy
+            if lockedEnemy then
+                GunSystem.update(body, lockedEnemy)
+    
+                -- Bomb drop: fire up to 3 times while orbiting an enemy
+                local now = tick()
+                if bombCount > 0 and (now - lastBombTime) >= BOMB_COOLDOWN then
+                    local event = ReplicatedStorage:FindFirstChild("Event")
+                    if event then
+                        event:FireServer("bomb")
+                        bombCount = bombCount - 1
+                        lastBombTime = now
+                        print("[Main] Bomb dropped! Remaining:", bombCount)
+                    end
+                end
+            else
+                GunSystem.stopFiring()
+                -- Reset bomb count when no enemy is locked
+                bombCount = BOMB_MAX
+            end
         end
+    end)
 
 -- PUBLIC API
 function MainController.start()

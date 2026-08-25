@@ -77,6 +77,65 @@ local function predictIntercept(targetPos, targetVel, myPos, mySpeed)
     return targetPos + targetVel * t
 end
 
+-- RL Direct Control Interface
+-- Applies raw control values directly to vehicle physics
+-- pitch: -1 to 1 (nose up/down)
+-- yaw: -1 to 1 (nose left/right)
+-- throttle: 0 or 1 (stop or full speed ~115 studs/sec)
+local function setDirectControl(body, pitch, yaw, throttle)
+    local gyro = body:FindFirstChild("BodyGyro")
+    local vel = body:FindFirstChild("BodyVelocity")
+    
+    if not gyro or not vel then return end
+    
+    -- Apply pitch and yaw by rotating the look vector
+    local currentCFrame = body.CFrame
+    local lookVector = currentCFrame.LookVector
+    local rightVector = currentCFrame.RightVector
+    local upVector = currentCFrame.UpVector
+    
+    -- Calculate rotation from pitch and yaw
+    local pitchAngle = pitch * 0.15  -- Max ~8.6 degrees per frame at 60 FPS
+    local yawAngle = yaw * 0.15
+    
+    -- Rotate look vector by pitch (around right axis)
+    local rotatedLook = lookVector * math.cos(pitchAngle) + upVector * math.sin(pitchAngle)
+    
+    -- Rotate by yaw (around up axis)
+    local newUp = upVector * math.cos(yawAngle) - rightVector * math.sin(yawAngle)
+    rotatedLook = rotatedLook * math.cos(yawAngle) + rightVector * math.sin(yawAngle)
+    
+    -- Normalize and create new CFrame
+    rotatedLook = rotatedLook.Unit
+    local newRight = rotatedLook:Cross(newUp).Unit
+    newUp = newRight:Cross(rotatedLook).Unit
+    
+    local targetCFrame = CFrame.fromMatrix(body.Position, newRight, newUp, -rotatedLook)
+    
+    -- Apply rotation
+    if gyro:IsA("BodyGyro") then
+        gyro.CFrame = targetCFrame
+        gyro.D = MC.gyroDampening
+        gyro.MaxTorque = Vector3.new(MC.gyroMaxTorque, MC.gyroMaxTorque, MC.gyroMaxTorque)
+    elseif gyro:IsA("AlignOrientation") then
+        gyro.CFrame = targetCFrame
+        gyro.Responsiveness = 200
+        gyro.MaxTorque = math.huge
+    end
+    
+    -- Apply throttle (binary: 0 or full speed)
+    local speed = throttle > 0.5 and MC.combatSpeed or 0
+    local moveDir = rotatedLook * speed
+    
+    if vel:IsA("BodyVelocity") then
+        vel.Velocity = moveDir
+        vel.MaxForce = Vector3.new(1e5, 1e5, 1e5)
+    elseif vel:IsA("LinearVelocity") then
+        vel.VectorVelocity = moveDir
+        vel.MaxForce = 1e5
+    end
+end
+
 local MOVE = {}
 
 function MOVE.intercept(body, targetPos, targetVel, dt)
@@ -169,5 +228,8 @@ function MOVE.setParabolicTarget(startPos, targetPos, targetAlt)
         pathPeakY = math.max(startPos.Y, targetAlt) * 3
     end
 end
+
+-- Export direct control for RL
+MOVE.setDirectControl = setDirectControl
 
 return MOVE
