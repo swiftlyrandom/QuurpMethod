@@ -1,4 +1,4 @@
--- AutoStart.lua
+-- AutoStart.lua // Fixing Bugs!
 -- Automatically connects to RL WebSocket server when character spawns
 -- Place this in _G._Modules and require it from BotLoader or a LocalScript
 
