@@ -10,7 +10,7 @@ if not HttpService.HttpEnabled then
 end
 
 -- Configuration - CHANGE THIS TO YOUR PC'S IP
-local SERVER_IP = "192.168.1.100"  -- Replace with your actual PC IP
+local SERVER_IP = "127.0.0.1"  -- Replace with your actual PC IP
 local SERVER_PORT = 8765
 local MAX_RETRIES = 5
 local RETRY_DELAY = 1.0
