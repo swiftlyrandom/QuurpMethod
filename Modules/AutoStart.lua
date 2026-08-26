@@ -19,22 +19,29 @@ local WSClient = nil
 local MainController = nil
 
 local function getModules()
+    -- IMPORTANT: BootLoader already loaded these as tables into _G._Modules
+    -- DO NOT use require() on tables - just use them directly!
+    WSClient = _G._Modules.RLWebSocketClient
+    MainController = _G._Modules.MainController
+    
     if not WSClient then
-        -- BotLoader already required these, so _G._Modules contains the tables directly
-        WSClient = _G._Modules.RLWebSocketClient
+        warn("[AutoStart] RLWebSocketClient not found in _G._Modules")
     end
     if not MainController then
-        MainController = _G._Modules.MainController
-        WSClient = require(_G._Modules.RLWebSocketClient)
+        warn("[AutoStart] MainController not found in _G._Modules")
     end
-    if not MainController then
-        MainController = require(_G._Modules.MainController)
-    end
+    
     return WSClient, MainController
 end
 
 local function connectWithRetry()
     local ws, mc = getModules()
+    if not ws or not mc then
+        warn("[AutoStart] Required modules not loaded. Retrying...")
+        task.wait(1)
+        return connectWithRetry()  -- Retry
+    end
+    
     local url = string.format("ws://%s:%d", SERVER_IP, SERVER_PORT)
     
     print("🚀 RL AutoStart: Attempting to connect to", url)
@@ -49,7 +56,7 @@ local function connectWithRetry()
         -- Give it a moment to establish
         task.wait(0.5)
         
-        if success and ws.isConnected() then
+        if success and ws.isConnected and ws.isConnected() then
             print("✅ Connected to RL server!")
             
             -- Create WebSocket-backed policy
