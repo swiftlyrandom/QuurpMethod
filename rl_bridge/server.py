@@ -1,16 +1,19 @@
+# rl_bridge/server.py - HTTP Version for Delta
 """
-WebSocket server for RL bot communication.
+HTTP Bridge for RL bot communication.
 Runs on Termux (Android) or any Python environment.
-Receives observations from Roblox, runs inference, sends back actions.
+Receives observations from Roblox via HTTP POST, runs inference, sends back actions via HTTP GET.
 """
 
-import asyncio
+from http.server import HTTPServer, BaseHTTPRequestHandler
 import json
+import threading
+from queue import Queue, Empty
+import time
 import numpy as np
-from websockets.server import serve
-from typing import Optional, Dict, Any
+from typing import Dict, Any, Optional
 
-# Import your existing physics simulation
+# Import your existing physics simulation if needed
 try:
     from plane.step import step as physics_step
     from plane.state import PlaneState
@@ -19,7 +22,7 @@ except ImportError:
     PHYSICS_AVAILABLE = False
     print("Warning: Physics module not found. Running in passthrough mode.")
 
-# Replace this with your actual trained model
+# --- Your RL Policy ---
 class RLPolicy:
     def __init__(self):
         self.model = None  # Load your PyTorch/TensorFlow model here
@@ -30,40 +33,45 @@ class RLPolicy:
         Returns dict with: pitch, yaw, throttle, fire_guns, drop_bomb
         """
         # TODO: Replace with actual model inference
-        # For now, return a simple heuristic action
         
-        # Example: extract features from observation
+        # Simple heuristic for demonstration
         self_pos = np.array(observation.get('position', [0, 200, 0]))
         self_vel = np.array(observation.get('velocity', [0, 0, 0]))
-        enemy_pos = np.array(observation.get('enemy_position', [0, 200, 100]))
         
-        # Simple proportional controller for demonstration
+        # Try to get enemy position from observation
+        enemy_pos = observation.get('enemy_position')
+        if enemy_pos is None:
+            # Try alternative field names
+            enemy_pos = observation.get('enemyRelativePos')
+            if enemy_pos is not None:
+                # enemyRelativePos is relative, convert to absolute
+                enemy_pos = self_pos + np.array(enemy_pos)
+        
         if enemy_pos is not None:
-            to_enemy = enemy_pos - self_pos
-            to_enemy[1] = 0  # Ignore vertical component for yaw
-            norm = np.linalg.norm(to_enemy)
-            if norm > 0.1:
-                desired_heading = to_enemy / norm
-                # Calculate pitch/yaw errors (simplified)
-                pitch_error = np.arctan2(to_enemy[1], norm) * 0.5
-                yaw_error = np.arctan2(to_enemy[0], to_enemy[2]) * 0.3
-            else:
-                pitch_error = 0.0
-                yaw_error = 0.0
-        else:
-            pitch_error = 0.0
-            yaw_error = 0.0
+            to_enemy = np.array(enemy_pos) - self_pos
+            horizontal_dist = np.linalg.norm(to_enemy[[0, 2]])
             
-        # Clip to valid range [-1, 1]
-        pitch = float(np.clip(pitch_error, -1.0, 1.0))
-        yaw = float(np.clip(yaw_error, -1.0, 1.0))
+            if horizontal_dist > 0.1:
+                # Yaw: turn toward enemy horizontally
+                yaw_error = np.arctan2(to_enemy[0], to_enemy[2])
+                # Pitch: aim up/down
+                pitch_error = np.arctan2(to_enemy[1], horizontal_dist)
+                
+                # Clamp to [-1, 1]
+                pitch = float(np.clip(pitch_error * 0.5, -1.0, 1.0))
+                yaw = float(np.clip(yaw_error * 0.3, -1.0, 1.0))
+            else:
+                pitch, yaw = 0.0, 0.0
+        else:
+            pitch, yaw = 0.0, 0.0
         
-        # Throttle: full speed if enemy exists and alive
-        throttle = 1.0 if observation.get('enemy_alive', False) else 0.0
+        # Throttle: full if enemy exists
+        enemy_locked = observation.get('enemyLocked', False)
+        throttle = 1.0 if enemy_locked else 0.0
         
-        # Weapons: fire if aligned (simplified logic)
-        fire_guns = 1.0 if abs(pitch) < 0.3 and abs(yaw) < 0.3 and observation.get('enemy_alive', False) else 0.0
-        drop_bomb = 0.0  # Only drop bombs in specific situations
+        # Fire guns if aligned and enemy locked
+        fire_guns = 1.0 if (enemy_locked and abs(pitch) < 0.3 and abs(yaw) < 0.3) else 0.0
+        drop_bomb = 0.0
         
         return {
             'pitch': pitch,
@@ -74,92 +82,179 @@ class RLPolicy:
         }
 
 
-class RLBridge:
-    def __init__(self):
-        self.policy = RLPolicy()
-        self.sim_state: Optional[PlaneState] = None
-        self.last_observation: Optional[Dict[str, Any]] = None
+# --- HTTP Handler ---
+class RLHandler(BaseHTTPRequestHandler):
+    """Handles HTTP requests from Roblox client."""
+    
+    # Shared state across all connections
+    policy = RLPolicy()
+    action_queue = Queue(maxsize=1)  # Only keep latest action
+    last_action = {'pitch': 0, 'yaw': 0, 'throttle': 0, 'fire_guns': 0, 'drop_bomb': 0}
+    last_observation = None
+    sim_state = None
+    
+    def log_message(self, format, *args):
+        """Suppress verbose logging."""
+        pass
+    
+    def do_GET(self):
+        """Handle GET requests."""
+        if self.path == "/ping":
+            self._send_json({'status': 'ok', 'timestamp': time.time()})
+            return
         
-    async def handle_client(self, websocket):
-        """Handle a single WebSocket connection from Roblox."""
-        print(f"Client connected: {websocket.remote_address}")
+        if self.path == "/action":
+            # Return the latest action immediately (non-blocking)
+            try:
+                action = self.action_queue.get_nowait()
+                self.last_action = action
+            except Empty:
+                pass  # Use last action
+            
+            self._send_json(self.last_action)
+            return
+        
+        if self.path == "/health":
+            self._send_json({
+                'status': 'ok',
+                'connected': True,
+                'queue_size': self.action_queue.qsize(),
+                'last_observation': self.last_observation is not None
+            })
+            return
+        
+        self._send_error(404, "Not found")
+    
+    def do_POST(self):
+        """Handle POST requests."""
+        if self.path == "/action":
+            content_length = int(self.headers.get('Content-Length', 0))
+            if content_length == 0:
+                self._send_error(400, "Empty body")
+                return
+            
+            post_data = self.rfile.read(content_length)
+            
+            try:
+                # Parse observation
+                data = json.loads(post_data.decode('utf-8'))
+                observation = data.get('observation', data)  # Handle wrapped format
+                
+                self.last_observation = observation
+                
+                # Run policy inference
+                action = self.policy.select_action(observation)
+                
+                # Optionally sync physics simulation
+                if PHYSICS_AVAILABLE:
+                    self._sync_sim_state(observation)
+                
+                # Store action for polling
+                try:
+                    self.action_queue.put_nowait(action)
+                except:
+                    # Queue full, replace
+                    try:
+                        self.action_queue.get_nowait()
+                        self.action_queue.put_nowait(action)
+                    except:
+                        pass
+                
+                self.last_action = action
+                self._send_json(action)
+                
+            except json.JSONDecodeError as e:
+                self._send_error(400, f"Invalid JSON: {e}")
+            except Exception as e:
+                self._send_error(500, str(e))
+            return
+        
+        self._send_error(404, "Not found")
+    
+    def _send_json(self, data):
+        """Send JSON response with CORS headers."""
+        self.send_response(200)
+        self.send_header('Content-Type', 'application/json')
+        self.send_header('Access-Control-Allow-Origin', '*')
+        self.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+        self.send_header('Access-Control-Allow-Headers', 'Content-Type')
+        self.end_headers()
         
         try:
-            async for message in websocket:
-                try:
-                    # Parse incoming observation
-                    observation = json.loads(message)
-                    self.last_observation = observation
-                    
-                    # Run policy inference
-                    action = self.policy.select_action(observation)
-                    
-                    # Optionally run physics simulation for validation
-                    if PHYSICS_AVAILABLE and self.sim_state is not None:
-                        # Update sim state with observation (for validation)
-                        self._sync_sim_state(observation)
-                        
-                        # Step simulation with action
-                        desired_heading = self._action_to_heading(action['pitch'], action['yaw'])
-                        physics_step(
-                            self.sim_state,
-                            dt=observation.get('dt', 0.016),
-                            desired_heading=desired_heading
-                        )
-                    
-                    # Send action back to Roblox
-                    response = json.dumps(action)
-                    await websocket.send(response)
-                    
-                except json.JSONDecodeError as e:
-                    print(f"Invalid JSON: {e}")
-                    await websocket.send(json.dumps({'error': 'Invalid JSON'}))
-                except Exception as e:
-                    print(f"Error processing message: {e}")
-                    await websocket.send(json.dumps({'error': str(e)}))
-                    
-        except Exception as e:
-            print(f"Connection error: {e}")
-        finally:
-            print(f"Client disconnected: {websocket.remote_address}")
+            self.wfile.write(json.dumps(data).encode('utf-8'))
+        except:
+            pass
     
-    def _sync_sim_state(self, observation: Dict[str, Any]):
-        """Sync simulation state with latest observation (for validation)."""
+    def _send_error(self, code, message):
+        """Send error response."""
+        self.send_response(code)
+        self.send_header('Content-Type', 'application/json')
+        self.send_header('Access-Control-Allow-Origin', '*')
+        self.end_headers()
+        self.wfile.write(json.dumps({'error': message}).encode('utf-8'))
+    
+    def _sync_sim_state(self, observation):
+        """Sync simulation state with observation."""
         if self.sim_state is None:
             self.sim_state = PlaneState()
-            
-        self.sim_state.position = np.array(observation.get('position', [0, 200, 0]))
-        self.sim_state.velocity = np.array(observation.get('velocity', [0, 0, 0]))
-        # heading would need to be reconstructed from orientation
-        self.sim_state.alive = observation.get('alive', True)
         
-    def _action_to_heading(self, pitch: float, yaw: float) -> np.ndarray:
-        """Convert pitch/yaw controls to desired heading vector."""
-        x = np.cos(pitch) * np.cos(yaw)
-        z = np.cos(pitch) * np.sin(yaw)
-        y = np.sin(pitch)
-        return np.array([x, y, z])
+        try:
+            pos = observation.get('position', [0, 200, 0])
+            vel = observation.get('velocity', [0, 0, 0])
+            self.sim_state.position = np.array(pos)
+            self.sim_state.velocity = np.array(vel)
+            self.sim_state.alive = observation.get('alive', True)
+        except:
+            pass
 
 
-async def main(host: str = "0.0.0.0", port: int = 8765):
-    """Start the WebSocket server."""
-    bridge = RLBridge()
+# --- Server ---
+class RLBridgeServer:
+    def __init__(self, host='0.0.0.0', port=8765):
+        self.host = host
+        self.port = port
+        self.server = None
+        
+    def start(self):
+        """Start the HTTP server."""
+        print(f"🚀 Starting RL Bridge HTTP Server on {self.host}:{self.port}")
+        print(f"📍 Use these URLs in Roblox:")
+        print(f"   Ping: http://{self.host}:{self.port}/ping")
+        print(f"   Action: http://{self.host}:{self.port}/action")
+        print(f"   Send observation: POST to http://{self.host}:{self.port}/action")
+        print()
+        print("📡 Waiting for Roblox client...")
+        
+        self.server = HTTPServer((self.host, self.port), RLHandler)
+        try:
+            self.server.serve_forever()
+        except KeyboardInterrupt:
+            self.stop()
     
-    print(f"Starting RL Bridge WebSocket server on {host}:{port}")
-    print("Waiting for Roblox client connection...")
-    
-    async with serve(bridge.handle_client, host, port):
-        await asyncio.Future()  # Run forever
+    def stop(self):
+        """Stop the server."""
+        if self.server:
+            self.server.shutdown()
+            print("🛑 Server stopped")
 
 
+# --- Main Entry Point ---
 if __name__ == "__main__":
     import argparse
-    parser = argparse.ArgumentParser(description="RL Bridge WebSocket Server")
+    
+    parser = argparse.ArgumentParser(description="RL Bridge HTTP Server")
     parser.add_argument("--host", default="0.0.0.0", help="Host to bind to")
     parser.add_argument("--port", type=int, default=8765, help="Port to listen on")
     args = parser.parse_args()
     
+    # Try to import physics
     try:
-        asyncio.run(main(args.host, args.port))
-    except KeyboardInterrupt:
-        print("\nServer stopped.")
+        from plane.step import step as physics_step
+        from plane.state import PlaneState
+        PHYSICS_AVAILABLE = True
+        print("✅ Physics module loaded")
+    except ImportError:
+        print("⚠️ Physics module not available - running in passthrough mode")
+    
+    server = RLBridgeServer(args.host, args.port)
+    server.start()
