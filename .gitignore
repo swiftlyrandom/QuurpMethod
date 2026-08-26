@@ -1,3 +1,4 @@
+Nothing needs to be added to .gitignore since the changes only include Lua source files (.lua) which are source code files that should not be ignored.
 ```
 # Python
 __pycache__/
