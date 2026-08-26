@@ -1,31 +1,42 @@
 Nothing needs to be added to .gitignore since the changes only include Lua source files (.lua) which are source code files that should not be ignored.
 ```
+# Compiled and build artifacts
 # Python
 __pycache__/
 *.pyc
-*.pyo
-*.pyd
+__pycache__/
+
+# Dependencies
+node_modules/
+venv/
+.venv/
 .env
 .env.local
-.env.*
+*.env.*
+
+# Editors
 .vscode/
 .idea/
+
+# Logs and temp files
 *.log
 *.tmp
 *.swp
+
+# System files
 .DS_Store
 Thumbs.db
-dist/
-build/
-target/
-node_modules/
-.venv/
-venv/
-.mypy_cache/
-.pytest_cache/
+
+# Coverage
 coverage/
 htmlcov/
 .coverage
+
+# Build directories
+dist/
+build/
+target/
+```
 ```
 .Python
 env/

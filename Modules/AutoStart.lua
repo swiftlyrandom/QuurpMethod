@@ -20,6 +20,11 @@ local MainController = nil
 
 local function getModules()
     if not WSClient then
+        -- BotLoader already required these, so _G._Modules contains the tables directly
+        WSClient = _G._Modules.RLWebSocketClient
+    end
+    if not MainController then
+        MainController = _G._Modules.MainController
         WSClient = require(_G._Modules.RLWebSocketClient)
     end
     if not MainController then
