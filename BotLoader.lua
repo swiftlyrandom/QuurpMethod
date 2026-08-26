@@ -23,6 +23,8 @@ local MODULE_NAMES = {
     "GunSystem",
     "MainController",
     "ExampleRLPolicy",
+    "RLWebSocketClient",
+    "AutoStart",
 }
 
 -- ---------- LOADER ----------
@@ -80,4 +82,6 @@ for _, name in ipairs(MODULE_NAMES) do
 end
 
 print("[Boot] All modules loaded. Starting pilot...")
+
+-- AutoStart will automatically connect to RL server when character spawns
 _G._Modules.MainController.start()
