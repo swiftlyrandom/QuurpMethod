@@ -25,6 +25,10 @@ local function getModules()
     end
     if not MainController then
         MainController = _G._Modules.MainController
+        WSClient = require(_G._Modules.RLWebSocketClient)
+    end
+    if not MainController then
+        MainController = require(_G._Modules.MainController)
     end
     return WSClient, MainController
 end
