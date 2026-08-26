@@ -1,126 +1,83 @@
--- AutoStart.lua // Fixing Bugs!
--- Automatically connects to RL WebSocket server when character spawns
--- Place this in _G._Modules and require it from BotLoader or a LocalScript
-
-local RunService = game:GetService("RunService")
+-- AutoStart.lua - HTTP Version
 local HttpService = game:GetService("HttpService")
 
-if not HttpService.HttpEnabled then
-    warn("⚠️ HTTP Service not enabled! Enable 'HTTP Requests' in Game Settings > Security")
-end
-
--- Configuration - CHANGE THIS TO YOUR PC'S IP
-local SERVER_IP = "127.0.0.1"  -- Replace with your actual PC IP
-local SERVER_PORT = 8765
-local MAX_RETRIES = 5
-local RETRY_DELAY = 1.0
-
-local WSClient = nil
+local SERVER_URL = "http://127.0.0.1:8765"
 local MainController = nil
+local connected = false
+local action = nil
+local running = false
 
-local function getModules()
-    -- IMPORTANT: BootLoader already loaded these as tables into _G._Modules
-    -- DO NOT use require() on tables - just use them directly!
-    WSClient = _G._Modules.RLWebSocketClient
-    MainController = _G._Modules.MainController
-    
-    if not WSClient then
-        warn("[AutoStart] RLWebSocketClient not found in _G._Modules")
-    end
-    if not MainController then
-        warn("[AutoStart] MainController not found in _G._Modules")
-    end
-    
-    return WSClient, MainController
-end
-
-local function connectWithRetry()
-    local ws, mc = getModules()
-    if not ws or not mc then
-        warn("[AutoStart] Required modules not loaded. Retrying...")
-        task.wait(1)
-        return connectWithRetry()  -- Retry
-    end
-    
-    local url = string.format("ws://%s:%d", SERVER_IP, SERVER_PORT)
-    
-    print("🚀 RL AutoStart: Attempting to connect to", url)
-    
-    for attempt = 1, MAX_RETRIES do
-        print(string.format("🔌 Connection attempt (%d/%d)...", attempt, MAX_RETRIES))
-        
-        local success, err = pcall(function()
-            ws.connect(url)
+local function poll()
+    while running do
+        local success, response = pcall(function()
+            return HttpService:GetAsync(SERVER_URL .. "/poll")
         end)
         
-        -- Give it a moment to establish
-        task.wait(0.5)
+        if success and response and response ~= "" then
+            local success2, data = pcall(function()
+                return HttpService:JSONDecode(response)
+            end)
+            if success2 then
+                action = data
+            end
+        end
         
-        if success and ws.isConnected and ws.isConnected() then
-            print("✅ Connected to RL server!")
+        task.wait(0.05)  -- 50ms poll rate
+    end
+end
+
+local function startPolling()
+    if running then return end
+    running = true
+    task.spawn(poll)
+end
+
+local function connect()
+    MainController = _G._Modules.MainController
+    
+    -- Test connection
+    local success, response = pcall(function()
+        return HttpService:GetAsync(SERVER_URL .. "/ping")
+    end)
+    
+    if success then
+        print("✅ Connected to RL server via HTTP")
+        startPolling()
+        
+        local WSPolicy = {}
+        function WSPolicy.selectAction(obs)
+            -- Send observation and get action
+            local json = HttpService:JSONEncode({
+                observation = obs,
+                timestamp = tick()
+            })
             
-            -- Create WebSocket-backed policy
-            local WSPolicy = {}
-            function WSPolicy.selectAction(obs)
-                if not ws.isConnected() then
-                    -- Fallback to zeros if disconnected
-                    return {pitch=0, yaw=0, throttle=0, fire_guns=0, drop_bomb=0}
-                end
-                
-                ws.sendObservation(obs)
-                task.wait(0.03)  -- Small delay for response
-                
-                local action = ws.receiveAction()
-                if action then
-                    return action
-                else
-                    -- Timeout or error, return safe defaults
-                    return {pitch=0, yaw=0, throttle=0, fire_guns=0, drop_bomb=0}
-                end
+            local success, response = pcall(function()
+                return HttpService:PostAsync(SERVER_URL .. "/action", json, Enum.HttpContentType.ApplicationJson)
+            end)
+            
+            if success then
+                local actionData = HttpService:JSONDecode(response)
+                return actionData
             end
             
-            -- Activate RL mode
-            mc.setRLMode(true)
-            mc.setRLPolicy(WSPolicy)
-            print("🤖 RL Mode activated with WebSocket policy")
-            return true
+            -- Fallback
+            return {pitch=0, yaw=0, throttle=0, fire_guns=0, drop_bomb=0}
         end
         
-        warn("❌ Connection failed:", err or "unknown error")
-        if attempt < MAX_RETRIES then
-            print("⏳ Retrying in", RETRY_DELAY, "seconds...")
-            task.wait(RETRY_DELAY)
-        end
+        MainController.setRLMode(true)
+        MainController.setRLPolicy(WSPolicy)
+        return true
+    else
+        warn("⚠️ Failed to connect to RL server")
+        return false
     end
-    
-    warn("⚠️ Failed to connect after", MAX_RETRIES, "attempts.")
-    warn("⚠️ Running in heuristic mode instead.")
-    
-    -- Ensure we're in heuristic mode
-    mc.setRLMode(false)
-    return false
 end
 
--- Connect when character spawns
-local function onCharacterAdded(character)
-    -- Wait a bit for modules to fully load
-    task.delay(2.0, connectWithRetry)
-end
+-- Auto-start
+game.Players.LocalPlayer.CharacterAdded:Connect(function()
+    task.wait(2)
+    connect()
+end)
 
--- Hook into CharacterAdded
-game.Players.LocalPlayer.CharacterAdded:Connect(onCharacterAdded)
-
--- Also try immediately if character already exists
-if game.Players.LocalPlayer.Character then
-    onCharacterAdded(game.Players.LocalPlayer.Character)
-end
-
-print("🎯 RL AutoStart initialized. Will connect when character spawns.")
-print("   Server:", SERVER_IP .. ":" .. SERVER_PORT)
-print("   To change IP, edit Modules/AutoStart.lua")
-
-return {
-    connectNow = connectWithRetry,
-    setServerIP = function(ip) SERVER_IP = ip end,
-    setServerPort = function(port) SERVER_PORT = port end,
-}
+return { connectNow = connect }
